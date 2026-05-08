@@ -228,6 +228,20 @@
         <input type="text" id="li-pid" placeholder="e.g. 84y5U63xF-" />
       </div>
     </div>
+    <div class="two-col">
+      <div class="field">
+        <label for="li-refresh">Refresh Token <span class="hint">enables auto-renewal so token never expires</span></label>
+        <input type="password" id="li-refresh" placeholder="Your LinkedIn refresh token" />
+      </div>
+      <div class="field">
+        <label for="li-client-id">Client ID <span class="hint">from your LinkedIn app</span></label>
+        <input type="text" id="li-client-id" placeholder="e.g. 779aid9t2pm8ro" />
+      </div>
+    </div>
+    <div class="field">
+      <label for="li-client-secret">Client Secret <span class="hint">from your LinkedIn app</span></label>
+      <input type="password" id="li-client-secret" placeholder="e.g. WPL_AP1.xxx" />
+    </div>
 
     <details class="help">
       <summary>How to get your LinkedIn token &amp; Person ID</summary>
@@ -424,6 +438,14 @@ document.addEventListener('change', function(e) {
 
 function uid(n) { return 'ww' + String(n).padStart(6,'0') + '-0000-0000-0000-000000000000'; }
 
+function hoursToUTC(hours, timezone) {
+  const now = new Date();
+  const localTime = new Date(now.toLocaleString('en-US', { timeZone: timezone }));
+  const utcTime   = new Date(now.toLocaleString('en-US', { timeZone: 'UTC' }));
+  const offsetHours = Math.round((localTime - utcTime) / 3600000);
+  return hours.map(h => ((h - offsetHours) % 24 + 24) % 24).sort((a, b) => a - b);
+}
+
 // Normalize code templates
 const NORM_RSS = function(sourceName) {
   return 'try {\n  var posts = $input.all().map(function(i){ return i.json; }).filter(function(a){ return a.title; }).map(function(a, idx){ return { json: { title: a.title, body: (a.contentSnippet||a.content||a.summary||\'\').replace(/<[^>]*>/g,\'\').substring(0,300), source: \'' + sourceName.replace(/'/g,"\\'") + '\', score: Math.max(0, 40-idx) } }; });\n  return posts.length > 0 ? posts : [{ json: { _skip: true } }];\n} catch(e) { return [{ json: { _skip: true } }]; }';
@@ -445,9 +467,10 @@ function buildWorkflow(c) {
 
   function yPos(i) { return 100 + i * yStep; }
 
-  // Schedule
-  const cron = '0 ' + c.hours.join(',') + ' * * *';
-  nodes.push({ id: uid(1), name: 'Schedule Trigger', type: 'n8n-nodes-base.scheduleTrigger', typeVersion: 1.1, position: [0, 400], parameters: { rule: { interval: [{ field: 'cronExpression', expression: cron }] }, timezone: c.timezone } });
+  // Schedule — convert selected times to UTC so no timezone config needed in n8n
+  const utcHours = hoursToUTC(c.hours, c.timezone);
+  const cron = '0 ' + utcHours.join(',') + ' * * *';
+  nodes.push({ id: uid(1), name: 'Schedule Trigger', type: 'n8n-nodes-base.scheduleTrigger', typeVersion: 1.1, position: [0, 400], parameters: { rule: { interval: [{ field: 'cronExpression', expression: cron }] } } });
 
   // ── Built-in JSON sources ──
   function addJsonSource(name, url, headers) {
@@ -551,12 +574,30 @@ function buildWorkflow(c) {
     : 'var data = $input.first().json;\nreturn [{ json: { post: data.choices[0].message.content.trim() } }];';
   nodes.push({ id: uid(33), name: 'Extract Post', type: 'n8n-nodes-base.code', typeVersion: 2, position: [1420, mergeY], parameters: { jsCode: extractCode } });
 
+  // ── Refresh LinkedIn Token (optional) ──
+  const hasRefresh = c.liRefreshToken && c.liClientId && c.liClientSecret;
+  if (hasRefresh) {
+    nodes.push({ id: uid(34), name: 'Refresh LinkedIn Token', type: 'n8n-nodes-base.httpRequest', typeVersion: 4.1, position: [1660, mergeY], parameters: {
+      method: 'POST', url: 'https://www.linkedin.com/oauth/v2/accessToken',
+      sendBody: true, contentType: 'form-urlencoded',
+      bodyParameters: { parameters: [
+        { name: 'grant_type',    value: 'refresh_token' },
+        { name: 'refresh_token', value: c.liRefreshToken },
+        { name: 'client_id',     value: c.liClientId },
+        { name: 'client_secret', value: c.liClientSecret }
+      ]}
+    }});
+  }
+
   // ── Post to LinkedIn ──
-  nodes.push({ id: uid(34), name: 'Post to LinkedIn', type: 'n8n-nodes-base.httpRequest', typeVersion: 4.1, position: [1660, mergeY], parameters: {
+  const liPostX = hasRefresh ? 1900 : 1660;
+  const liAuthValue = hasRefresh ? '=Bearer {{ $json.access_token }}' : 'Bearer ' + c.liToken;
+  const liPostText  = hasRefresh ? "$('Extract Post').first().json.post" : '$json.post';
+  nodes.push({ id: uid(35), name: 'Post to LinkedIn', type: 'n8n-nodes-base.httpRequest', typeVersion: 4.1, position: [liPostX, mergeY], parameters: {
     method: 'POST', url: 'https://api.linkedin.com/v2/ugcPosts',
-    sendHeaders: true, headerParameters: { parameters: [{ name: 'Authorization', value: 'Bearer ' + c.liToken }, { name: 'Content-Type', value: 'application/json' }, { name: 'X-Restli-Protocol-Version', value: '2.0.0' }] },
+    sendHeaders: true, headerParameters: { parameters: [{ name: 'Authorization', value: liAuthValue }, { name: 'Content-Type', value: 'application/json' }, { name: 'X-Restli-Protocol-Version', value: '2.0.0' }] },
     sendBody: true, contentType: 'raw', rawContentType: 'application/json',
-    body: "={{ JSON.stringify({ author: 'urn:li:person:" + c.liPid + "', lifecycleState: 'PUBLISHED', specificContent: { 'com.linkedin.ugc.ShareContent': { shareCommentary: { text: $json.post }, shareMediaCategory: 'NONE' } }, visibility: { 'com.linkedin.ugc.MemberNetworkVisibility': 'PUBLIC' } }) }}"
+    body: "={{ JSON.stringify({ author: 'urn:li:person:" + c.liPid + "', lifecycleState: 'PUBLISHED', specificContent: { 'com.linkedin.ugc.ShareContent': { shareCommentary: { text: " + liPostText + " }, shareMediaCategory: 'NONE' } }, visibility: { 'com.linkedin.ugc.MemberNetworkVisibility': 'PUBLIC' } }) }}"
   }});
 
   // ── Connections ──
@@ -566,7 +607,12 @@ function buildWorkflow(c) {
   conn['Merge All Sources'] = { main: [[{ node: 'Build Prompt', type: 'main', index: 0 }]] };
   conn['Build Prompt']  = { main: [[{ node: genName, type: 'main', index: 0 }]] };
   conn[genName]         = { main: [[{ node: 'Extract Post', type: 'main', index: 0 }]] };
-  conn['Extract Post']  = { main: [[{ node: 'Post to LinkedIn', type: 'main', index: 0 }]] };
+  if (hasRefresh) {
+    conn['Extract Post']           = { main: [[{ node: 'Refresh LinkedIn Token', type: 'main', index: 0 }]] };
+    conn['Refresh LinkedIn Token'] = { main: [[{ node: 'Post to LinkedIn', type: 'main', index: 0 }]] };
+  } else {
+    conn['Extract Post'] = { main: [[{ node: 'Post to LinkedIn', type: 'main', index: 0 }]] };
+  }
 
   return { name: ind + ' LinkedIn Auto-Post', nodes, connections: conn, settings: { executionOrder: 'v1' }, staticData: null, tags: [], pinData: {} };
 }
@@ -579,8 +625,11 @@ function generate() {
 
   const prov    = document.querySelector('input[name=provider]:checked').value;
   const apiKey  = document.getElementById('api-key').value.trim();
-  const liToken = document.getElementById('li-token').value.trim();
-  const liPid   = document.getElementById('li-pid').value.trim();
+  const liToken        = document.getElementById('li-token').value.trim();
+  const liPid          = document.getElementById('li-pid').value.trim();
+  const liRefreshToken = document.getElementById('li-refresh').value.trim();
+  const liClientId     = document.getElementById('li-client-id').value.trim();
+  const liClientSecret = document.getElementById('li-client-secret').value.trim();
 
   if (!apiKey)  { alert('Please enter your AI provider API key.'); return; }
   if (!liToken) { alert('Please enter your LinkedIn access token.'); return; }
@@ -606,7 +655,7 @@ function generate() {
     mediumTag:    document.getElementById('medium-tag').value.trim() || 'technology',
     useReddit, useHN, useDevto, useLobsters, useMedium, useProductHunt, customSources,
     provider: prov, apiKey, model: document.getElementById('model').value,
-    liToken, liPid, hours,
+    liToken, liPid, liRefreshToken, liClientId, liClientSecret, hours,
     timezone: document.getElementById('timezone').value
   };
 

@@ -8,11 +8,16 @@
       "typeVersion": 1.1,
       "position": [0, 400],
       "parameters": {
+        "timezone": "Europe/Berlin",
         "rule": {
           "interval": [
             {
               "field": "cronExpression",
-              "expression": "0 8,13,18 * * *"
+              "expression": "0 7,10,13,16,19 * * *"
+            },
+            {
+              "field": "cronExpression",
+              "expression": "40 17 * * *"
             }
           ]
         }

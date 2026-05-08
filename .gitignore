@@ -1,3 +1,5 @@
 .claude/
 *.env
 .env.*
+ai-linkedin-workflow-ready.json
+*.key
