@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LinkedIn Workflow Generator</title>
+  <style>
+    :root {
+      --primary: #0A66C2;
+      --primary-dark: #004182;
+      --bg: #f3f2ef;
+      --card: #ffffff;
+      --border: #e0e0e0;
+      --muted: #666;
+      --radius: 8px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: #111; line-height: 1.5; }
+
+    header { background: var(--primary); color: #fff; padding: 28px 16px; text-align: center; }
+    header h1 { font-size: 1.75rem; margin-bottom: 4px; }
+    header p { opacity: 0.85; font-size: 0.95rem; }
+
+    .container { max-width: 780px; margin: 32px auto 60px; padding: 0 16px; }
+
+    .card { background: var(--card); border-radius: var(--radius); padding: 28px; margin-bottom: 20px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+
+    .card-header { display: flex; align-items: center; gap: 12px; margin-bottom: 22px; }
+    .badge { background: var(--primary); color: #fff; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.82rem; font-weight: 700; flex-shrink: 0; }
+    .card h2 { font-size: 1.05rem; }
+
+    .field { margin-bottom: 16px; }
+    label { display: block; font-size: 0.875rem; font-weight: 600; margin-bottom: 5px; }
+    .hint { font-weight: 400; color: var(--muted); font-size: 0.82rem; margin-left: 5px; }
+
+    input[type=text], input[type=password], select, textarea {
+      width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px;
+      font-size: 0.9rem; font-family: inherit; background: #fff; transition: border-color 0.15s;
+    }
+    input:focus, select:focus, textarea:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(10,102,194,0.1); }
+
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+    /* Presets */
+    .preset-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
+    .preset-btn { padding: 6px 14px; border: 1px solid var(--border); border-radius: 20px; background: #fff; font-size: 0.82rem; cursor: pointer; transition: all 0.15s; }
+    .preset-btn:hover { border-color: var(--primary); color: var(--primary); }
+    .preset-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+    /* Provider */
+    .provider-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px; }
+    .provider-option input[type=radio] { position: absolute; opacity: 0; width: 0; }
+    .provider-option { position: relative; }
+    .provider-option label {
+      display: flex; flex-direction: column; align-items: center; gap: 6px;
+      padding: 16px 10px; border: 2px solid var(--border); border-radius: 8px;
+      cursor: pointer; font-size: 0.88rem; font-weight: 500; transition: all 0.15s; text-align: center;
+    }
+    .provider-option label .icon { font-size: 1.4rem; }
+    .provider-option input:checked + label { border-color: var(--primary); background: rgba(10,102,194,0.05); color: var(--primary); }
+
+    /* Sources */
+    .sources-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 16px; }
+    .source-check { display: flex; align-items: center; gap: 10px; padding: 11px 14px; border: 1px solid var(--border); border-radius: 6px; cursor: pointer; font-size: 0.9rem; font-weight: 500; }
+    .source-check input { width: 16px; height: 16px; cursor: pointer; }
+    .source-config { background: #f9f9f9; border: 1px solid var(--border); border-radius: 6px; padding: 14px; margin-bottom: 12px; }
+    .source-config label { font-size: 0.82rem; color: var(--muted); font-weight: 500; margin-bottom: 4px; }
+    .custom-row { display: grid; grid-template-columns: 160px 1fr auto auto; gap: 8px; align-items: center; margin-bottom: 8px; }
+    .custom-row input { margin: 0; }
+    .btn-sm { padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; background: #fff; cursor: pointer; font-size: 0.82rem; transition: all 0.15s; white-space: nowrap; }
+    .btn-sm:hover { border-color: var(--primary); color: var(--primary); }
+    .btn-sm.danger:hover { border-color: #c0392b; color: #c0392b; }
+    .btn-add { display: flex; align-items: center; gap: 6px; padding: 9px 14px; border: 1px dashed var(--primary); border-radius: 6px; background: rgba(10,102,194,0.04); color: var(--primary); cursor: pointer; font-size: 0.85rem; font-weight: 600; transition: all 0.15s; width: 100%; justify-content: center; margin-top: 8px; }
+    .btn-add:hover { background: rgba(10,102,194,0.1); }
+    .tag-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
+    .section-divider { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
+    .source-type-badge { font-size: 0.7rem; font-weight: 600; padding: 2px 7px; border-radius: 10px; background: #e8f0fe; color: var(--primary); margin-left: 4px; }
+
+    /* Schedule */
+    .schedule-wrap { display: flex; flex-wrap: wrap; gap: 10px; }
+    .sched-opt { display: flex; align-items: center; gap: 6px; font-size: 0.85rem; cursor: pointer; }
+    .sched-opt input { width: 15px; height: 15px; cursor: pointer; }
+
+    /* Help box */
+    details.help { background: #f0f7ff; border: 1px solid #c8dff5; border-radius: 6px; padding: 0; margin-top: 12px; }
+    details.help summary { padding: 12px 16px; cursor: pointer; color: var(--primary); font-size: 0.85rem; font-weight: 600; list-style: none; display: flex; align-items: center; gap: 6px; }
+    details.help summary::before { content: '▶'; font-size: 0.65rem; transition: transform 0.2s; }
+    details.help[open] summary::before { transform: rotate(90deg); }
+    details.help .help-body { padding: 0 16px 14px; font-size: 0.84rem; color: #333; }
+    details.help ol, details.help ul { margin-left: 18px; }
+    details.help li { margin-bottom: 6px; }
+    details.help code { background: #deeaf9; padding: 2px 6px; border-radius: 4px; font-family: monospace; font-size: 0.8rem; word-break: break-all; }
+
+    /* Generate button */
+    .btn-gen { width: 100%; padding: 16px; background: var(--primary); color: #fff; border: none; border-radius: var(--radius); font-size: 1rem; font-weight: 700; cursor: pointer; transition: background 0.2s; margin-bottom: 24px; }
+    .btn-gen:hover { background: var(--primary-dark); }
+
+    /* Import guide */
+    .import-guide { background: #fff; border-radius: var(--radius); padding: 24px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+    .import-guide h3 { font-size: 1rem; margin-bottom: 14px; color: var(--primary); }
+    .steps-list { list-style: none; counter-reset: steps; }
+    .steps-list li { counter-increment: steps; display: flex; gap: 12px; margin-bottom: 10px; font-size: 0.88rem; }
+    .steps-list li::before { content: counter(steps); background: var(--primary); color: #fff; width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 700; flex-shrink: 0; margin-top: 1px; }
+
+    @media (max-width: 560px) {
+      .two-col, .provider-grid, .sources-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>🔗 LinkedIn Workflow Generator</h1>
+  <p>Generate a custom n8n auto-posting workflow for any industry</p>
+</header>
+
+<div class="container">
+
+  <!-- Step 1: Industry -->
+  <div class="card">
+    <div class="card-header"><div class="badge">1</div><h2>Industry &amp; Content</h2></div>
+
+    <div class="field">
+      <label>Industry Preset</label>
+      <div class="preset-row" id="presets"></div>
+    </div>
+
+    <div class="two-col">
+      <div class="field">
+        <label for="industry">Industry Name <span class="hint">used in the AI prompt</span></label>
+        <input type="text" id="industry" placeholder="e.g. Artificial Intelligence, Finance, Real Estate" />
+      </div>
+      <div class="field">
+        <label for="devto-tag">Dev.to Tag</label>
+        <input type="text" id="devto-tag" placeholder="e.g. ai, webdev, finance" />
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="subreddits">Reddit Subreddits <span class="hint">join with + no spaces</span></label>
+      <input type="text" id="subreddits" placeholder="e.g. artificial+ChatGPT+MachineLearning+Entrepreneur" />
+    </div>
+
+    <div class="field">
+      <label for="hn-query">Hacker News Search Query</label>
+      <input type="text" id="hn-query" placeholder="e.g. AI artificial intelligence business" />
+    </div>
+  </div>
+
+  <!-- Step 2: Sources -->
+  <div class="card">
+    <div class="card-header"><div class="badge">2</div><h2>Content Sources</h2></div>
+
+    <div class="field"><label>Built-in Sources</label></div>
+    <div class="sources-grid">
+      <label class="source-check"><input type="checkbox" id="use-reddit" checked /> Reddit</label>
+      <label class="source-check"><input type="checkbox" id="use-hn" checked /> Hacker News</label>
+      <label class="source-check"><input type="checkbox" id="use-devto" checked /> Dev.to</label>
+      <label class="source-check"><input type="checkbox" id="use-lobsters" checked /> Lobste.rs <span class="source-type-badge">tech</span></label>
+      <label class="source-check"><input type="checkbox" id="use-medium" /> Medium <span class="source-type-badge">RSS</span></label>
+      <label class="source-check"><input type="checkbox" id="use-producthunt" /> Product Hunt <span class="source-type-badge">RSS</span></label>
+    </div>
+
+    <div class="tag-row">
+      <div id="medium-config" style="display:none">
+        <div class="source-config">
+          <label for="medium-tag">Medium Tag</label>
+          <input type="text" id="medium-tag" placeholder="e.g. artificial-intelligence, marketing" value="artificial-intelligence" />
+        </div>
+      </div>
+      <div></div>
+    </div>
+
+    <hr class="section-divider" />
+
+    <div class="field"><label>Custom Sources <span class="hint">add any RSS feed or JSON API</span></label></div>
+    <div id="custom-sources"></div>
+    <button class="btn-add" onclick="addCustomSource()">+ Add Custom Source</button>
+  </div>
+
+  <!-- Step 3: AI Provider -->
+  <div class="card">
+    <div class="card-header"><div class="badge">3</div><h2>AI Provider</h2></div>
+
+    <div class="provider-grid">
+      <div class="provider-option">
+        <input type="radio" name="provider" id="p-groq" value="groq" checked onchange="onProviderChange()" />
+        <label for="p-groq"><span class="icon">⚡</span>Groq<small style="color:#888;font-weight:400;font-size:0.75rem">Free tier</small></label>
+      </div>
+      <div class="provider-option">
+        <input type="radio" name="provider" id="p-openai" value="openai" onchange="onProviderChange()" />
+        <label for="p-openai"><span class="icon">🟢</span>OpenAI<small style="color:#888;font-weight:400;font-size:0.75rem">GPT-4o</small></label>
+      </div>
+      <div class="provider-option">
+        <input type="radio" name="provider" id="p-anthropic" value="anthropic" onchange="onProviderChange()" />
+        <label for="p-anthropic"><span class="icon">🔶</span>Anthropic<small style="color:#888;font-weight:400;font-size:0.75rem">Claude</small></label>
+      </div>
+    </div>
+
+    <div class="two-col">
+      <div class="field">
+        <label for="api-key">API Key</label>
+        <input type="password" id="api-key" placeholder="Paste your API key" />
+      </div>
+      <div class="field">
+        <label for="model">Model</label>
+        <select id="model"></select>
+      </div>
+    </div>
+
+    <details class="help">
+      <summary>How to get your API key</summary>
+      <div class="help-body" id="provider-help"></div>
+    </details>
+  </div>
+
+  <!-- Step 4: LinkedIn -->
+  <div class="card">
+    <div class="card-header"><div class="badge">4</div><h2>LinkedIn Setup</h2></div>
+
+    <div class="two-col">
+      <div class="field">
+        <label for="li-token">Access Token</label>
+        <input type="password" id="li-token" placeholder="Your LinkedIn Bearer token" />
+      </div>
+      <div class="field">
+        <label for="li-pid">Person ID</label>
+        <input type="text" id="li-pid" placeholder="e.g. 84y5U63xF-" />
+      </div>
+    </div>
+
+    <details class="help">
+      <summary>How to get your LinkedIn token &amp; Person ID</summary>
+      <div class="help-body">
+        <ol>
+          <li>Go to <strong>linkedin.com/developers</strong> → Create App → under <strong>Products</strong> request <strong>"Share on LinkedIn"</strong> (auto-approved)</li>
+          <li>Under the <strong>Auth</strong> tab → add redirect URL: <code>http://localhost:3000</code></li>
+          <li>Open this URL in your browser (replace CLIENT_ID with yours from the Auth tab):<br/>
+            <code>https://www.linkedin.com/oauth/v2/authorization?response_type=code&amp;client_id=CLIENT_ID&amp;redirect_uri=http://localhost:3000&amp;scope=w_member_social%20openid%20profile</code>
+          </li>
+          <li>After authorizing, your browser redirects to <code>http://localhost:3000/?code=ABC123...</code> — copy that full URL</li>
+          <li>Run this in your terminal to get the token (replace placeholders):<br/>
+            <code>curl -X POST https://www.linkedin.com/oauth/v2/accessToken --data-urlencode "grant_type=authorization_code" --data-urlencode "code=PASTE_CODE" --data-urlencode "redirect_uri=http://localhost:3000" --data-urlencode "client_id=YOUR_CLIENT_ID" --data-urlencode "client_secret=YOUR_SECRET"</code>
+          </li>
+          <li>Copy the <code>access_token</code> value from the response — paste it above</li>
+          <li>Get your Person ID by running:<br/>
+            <code>curl -H "Authorization: Bearer YOUR_TOKEN" https://api.linkedin.com/v2/userinfo</code><br/>
+            Copy the <code>sub</code> field value — paste it as Person ID above
+          </li>
+          <li><strong>Note:</strong> Token expires in 60 days — repeat steps 3–6 to refresh it</li>
+        </ol>
+      </div>
+    </details>
+  </div>
+
+  <!-- Step 5: Schedule -->
+  <div class="card">
+    <div class="card-header"><div class="badge">5</div><h2>Posting Schedule</h2></div>
+    <div class="field">
+      <label for="timezone">Timezone</label>
+      <select id="timezone">
+        <option value="UTC">UTC</option>
+        <option value="America/New_York">America/New_York — EST/EDT (UTC-5/4)</option>
+        <option value="America/Chicago">America/Chicago — CST/CDT (UTC-6/5)</option>
+        <option value="America/Denver">America/Denver — MST/MDT (UTC-7/6)</option>
+        <option value="America/Los_Angeles">America/Los_Angeles — PST/PDT (UTC-8/7)</option>
+        <option value="America/Sao_Paulo">America/Sao_Paulo — BRT (UTC-3)</option>
+        <option value="Europe/London">Europe/London — GMT/BST (UTC+0/1)</option>
+        <option value="Europe/Paris">Europe/Paris — CET/CEST (UTC+1/2)</option>
+        <option value="Europe/Berlin">Europe/Berlin — CET/CEST (UTC+1/2)</option>
+        <option value="Europe/Amsterdam">Europe/Amsterdam — CET/CEST (UTC+1/2)</option>
+        <option value="Europe/Moscow">Europe/Moscow — MSK (UTC+3)</option>
+        <option value="Africa/Johannesburg">Africa/Johannesburg — SAST (UTC+2)</option>
+        <option value="Asia/Dubai">Asia/Dubai — GST (UTC+4)</option>
+        <option value="Asia/Kolkata">Asia/Kolkata — IST (UTC+5:30)</option>
+        <option value="Asia/Dhaka">Asia/Dhaka — BST (UTC+6)</option>
+        <option value="Asia/Bangkok">Asia/Bangkok — ICT (UTC+7)</option>
+        <option value="Asia/Singapore">Asia/Singapore — SGT (UTC+8)</option>
+        <option value="Asia/Shanghai">Asia/Shanghai — CST (UTC+8)</option>
+        <option value="Asia/Tokyo">Asia/Tokyo — JST (UTC+9)</option>
+        <option value="Australia/Sydney">Australia/Sydney — AEDT (UTC+10/11)</option>
+        <option value="Pacific/Auckland">Pacific/Auckland — NZST (UTC+12/13)</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Post Times <span class="hint">select when to post each day (in your timezone above)</span></label>
+      <div class="schedule-wrap" id="schedule"></div>
+    </div>
+  </div>
+
+  <button class="btn-gen" onclick="generate()">⬇ Generate &amp; Download Workflow JSON</button>
+
+  <!-- Import guide -->
+  <div class="import-guide">
+    <h3>📥 How to import into n8n</h3>
+    <ol class="steps-list">
+      <li>Open n8n and go to <strong>Workflows</strong></li>
+      <li>Click <strong>Add Workflow</strong> (or open an existing one)</li>
+      <li>Click the <strong>3-dot menu</strong> (top right) → <strong>Import from file</strong></li>
+      <li>Select the downloaded JSON file</li>
+      <li>Click <strong>Save</strong>, then toggle the workflow <strong>Active</strong></li>
+      <li>The workflow will now run automatically at your chosen schedule</li>
+    </ol>
+  </div>
+
+</div>
+
+<script>
+const PRESETS = {
+  ai:         { label: '🤖 AI & Tech',     industry: 'AI & Technology',      subreddits: 'artificial+ChatGPT+AIforsmallbusiness+automation+MachineLearning+Entrepreneur+smallbusiness', hn: 'AI artificial intelligence business automation', devto: 'ai' },
+  marketing:  { label: '📈 Marketing',     industry: 'Marketing & Growth',    subreddits: 'marketing+digital_marketing+SEO+socialmedia+GrowthHacking+Entrepreneur',                       hn: 'marketing growth SEO content strategy digital',  devto: 'marketing' },
+  finance:    { label: '💰 Finance',        industry: 'Finance & Investing',   subreddits: 'investing+personalfinance+stocks+financialindependence+Economics+business',                    hn: 'finance investing fintech economics startup',    devto: 'finance' },
+  realestate: { label: '🏠 Real Estate',   industry: 'Real Estate',           subreddits: 'realestate+RealEstateInvesting+FirstTimeHomeBuyer+landlord+PropertyManagement',               hn: 'real estate property investment housing market', devto: 'realestate' },
+  health:     { label: '🏥 Health',         industry: 'Health & Wellness',     subreddits: 'health+nutrition+Fitness+HealthyFood+longevity+medicine',                                      hn: 'health wellness medicine fitness nutrition',     devto: 'health' },
+  ecommerce:  { label: '🛒 E-commerce',    industry: 'E-commerce & Retail',   subreddits: 'ecommerce+shopify+FulfillmentByAmazon+Entrepreneur+dropship+smallbusiness',                   hn: 'ecommerce retail shopify amazon business',       devto: 'ecommerce' },
+  saas:       { label: '💻 SaaS',           industry: 'SaaS & Software',       subreddits: 'SaaS+startups+Entrepreneur+webdev+ProductManagement+programming',                              hn: 'SaaS startup software product launch growth',    devto: 'startup' },
+  custom:     { label: '✏️ Custom',         industry: '',                      subreddits: '',                                                                                               hn: '',                                               devto: '' }
+};
+
+const MODELS = {
+  groq:      [{ v: 'llama-3.3-70b-versatile', l: 'Llama 3.3 70B (Recommended)' }, { v: 'llama3-8b-8192', l: 'Llama 3 8B (Faster)' }, { v: 'mixtral-8x7b-32768', l: 'Mixtral 8x7B' }],
+  openai:    [{ v: 'gpt-4o', l: 'GPT-4o (Recommended)' }, { v: 'gpt-4o-mini', l: 'GPT-4o Mini (Cheaper)' }, { v: 'gpt-4-turbo', l: 'GPT-4 Turbo' }],
+  anthropic: [{ v: 'claude-sonnet-4-6', l: 'Claude Sonnet 4.6 (Recommended)' }, { v: 'claude-opus-4-7', l: 'Claude Opus 4.7 (Most Capable)' }, { v: 'claude-haiku-4-5-20251001', l: 'Claude Haiku 4.5 (Fastest)' }]
+};
+
+const PROVIDER_HELP = {
+  groq:      '<ol><li>Go to <strong>console.groq.com</strong> and sign up — it\'s free</li><li>Click <strong>API Keys</strong> in the left sidebar</li><li>Click <strong>Create API Key</strong> and copy it</li></ol>',
+  openai:    '<ol><li>Go to <strong>platform.openai.com</strong> and sign up</li><li>Go to <strong>API Keys</strong> in the left menu</li><li>Click <strong>Create new secret key</strong> and copy it</li><li>Make sure billing is set up at platform.openai.com/billing</li></ol>',
+  anthropic: '<ol><li>Go to <strong>console.anthropic.com</strong> and sign up</li><li>Go to <strong>API Keys</strong> in the left menu</li><li>Click <strong>Create Key</strong> and copy it</li><li>Add credits at console.anthropic.com/settings/billing</li></ol>'
+};
+
+const HOURS = [6,7,8,9,10,11,12,13,14,15,16,17,18,19,20];
+const HOUR_LABELS = { 6:'6 AM',7:'7 AM',8:'8 AM',9:'9 AM',10:'10 AM',11:'11 AM',12:'12 PM',13:'1 PM',14:'2 PM',15:'3 PM',16:'4 PM',17:'5 PM',18:'6 PM',19:'7 PM',20:'8 PM' };
+const DEFAULT_HOURS = [8, 13, 18];
+
+function init() {
+  // Build presets
+  const row = document.getElementById('presets');
+  Object.entries(PRESETS).forEach(([k, p]) => {
+    const btn = document.createElement('button');
+    btn.className = 'preset-btn' + (k === 'ai' ? ' active' : '');
+    btn.textContent = p.label;
+    btn.dataset.key = k;
+    btn.onclick = () => setPreset(k);
+    row.appendChild(btn);
+  });
+
+  // Build schedule
+  const wrap = document.getElementById('schedule');
+  HOURS.forEach(h => {
+    const lbl = document.createElement('label');
+    lbl.className = 'sched-opt';
+    lbl.innerHTML = '<input type="checkbox" class="sh" value="' + h + '"' + (DEFAULT_HOURS.includes(h) ? ' checked' : '') + '> ' + HOUR_LABELS[h];
+    wrap.appendChild(lbl);
+  });
+
+  // Auto-select user's local timezone if it's in the list
+  try {
+    const localTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const sel = document.getElementById('timezone');
+    const opt = [...sel.options].find(o => o.value === localTz);
+    if (opt) sel.value = localTz;
+  } catch(e) {}
+
+  onProviderChange();
+  setPreset('ai');
+}
+
+function setPreset(key) {
+  document.querySelectorAll('.preset-btn').forEach(b => b.classList.toggle('active', b.dataset.key === key));
+  const p = PRESETS[key];
+  document.getElementById('industry').value = p.industry;
+  document.getElementById('subreddits').value = p.subreddits;
+  document.getElementById('hn-query').value = p.hn;
+  document.getElementById('devto-tag').value = p.devto;
+}
+
+function onProviderChange() {
+  const prov = document.querySelector('input[name=provider]:checked').value;
+  const sel = document.getElementById('model');
+  sel.innerHTML = MODELS[prov].map(m => '<option value="' + m.v + '">' + m.l + '</option>').join('');
+  document.getElementById('provider-help').innerHTML = PROVIDER_HELP[prov];
+}
+
+// ── Custom sources ────────────────────────────────────────────────────────────
+
+let customSourceCount = 0;
+
+function addCustomSource() {
+  const id = ++customSourceCount;
+  const container = document.getElementById('custom-sources');
+  const div = document.createElement('div');
+  div.className = 'custom-row';
+  div.id = 'cs-' + id;
+  div.innerHTML =
+    '<input type="text" class="cs-name" placeholder="Source name" />' +
+    '<input type="text" class="cs-url" placeholder="URL — RSS feed or JSON API endpoint" />' +
+    '<select class="cs-type"><option value="rss">RSS</option><option value="json-array">JSON Array</option><option value="json-object">JSON Object</option></select>' +
+    '<button class="btn-sm danger" onclick="removeCustomSource(' + id + ')">✕</button>';
+  container.appendChild(div);
+}
+
+function removeCustomSource(id) {
+  const el = document.getElementById('cs-' + id);
+  if (el) el.remove();
+}
+
+function getCustomSources() {
+  return [...document.querySelectorAll('.custom-row')].map(row => ({
+    name: row.querySelector('.cs-name').value.trim(),
+    url:  row.querySelector('.cs-url').value.trim(),
+    type: row.querySelector('.cs-type').value
+  })).filter(s => s.name && s.url);
+}
+
+// Toggle Medium tag field
+document.addEventListener('change', function(e) {
+  if (e.target.id === 'use-medium') {
+    document.getElementById('medium-config').style.display = e.target.checked ? 'block' : 'none';
+  }
+});
+
+// ── Workflow builder ──────────────────────────────────────────────────────────
+
+function uid(n) { return 'ww' + String(n).padStart(6,'0') + '-0000-0000-0000-000000000000'; }
+
+// Normalize code templates
+const NORM_RSS = function(sourceName) {
+  return 'try {\n  var posts = $input.all().map(function(i){ return i.json; }).filter(function(a){ return a.title; }).map(function(a, idx){ return { json: { title: a.title, body: (a.contentSnippet||a.content||a.summary||\'\').replace(/<[^>]*>/g,\'\').substring(0,300), source: \'' + sourceName.replace(/'/g,"\\'") + '\', score: Math.max(0, 40-idx) } }; });\n  return posts.length > 0 ? posts : [{ json: { _skip: true } }];\n} catch(e) { return [{ json: { _skip: true } }]; }';
+};
+
+const NORM_JSON_ARRAY = function(sourceName) {
+  return 'try {\n  var posts = $input.all().map(function(i){ return i.json; }).filter(function(a){ return a.title; }).map(function(a, idx){ return { json: { title: a.title, body: (a.description||a.body||a.summary||a.content||\'\').toString().replace(/<[^>]*>/g,\'\').substring(0,300), source: \'' + sourceName.replace(/'/g,"\\'") + '\', score: a.score||a.points||a.votes||a.likes||Math.max(0,30-idx) } }; });\n  return posts.length > 0 ? posts : [{ json: { _skip: true } }];\n} catch(e) { return [{ json: { _skip: true } }]; }';
+};
+
+const NORM_JSON_OBJECT = function(sourceName) {
+  return 'try {\n  var data = $input.first().json;\n  var arr = data.items||data.articles||data.posts||data.results||data.data||data.hits||[];\n  var posts = arr.filter(function(a){ return a.title; }).map(function(a,idx){ return { json: { title: a.title, body: (a.description||a.body||a.summary||a.content||\'\').toString().replace(/<[^>]*>/g,\'\').substring(0,300), source: \'' + sourceName.replace(/'/g,"\\'") + '\', score: a.score||a.points||a.votes||a.likes||Math.max(0,30-idx) } }; });\n  return posts.length > 0 ? posts : [{ json: { _skip: true } }];\n} catch(e) { return [{ json: { _skip: true } }]; }';
+};
+
+function buildWorkflow(c) {
+  const nodes = [], conn = {};
+  const yStep = 200;
+  let si = 0;
+  const fetchNodes = [], normNodes = [];
+
+  function yPos(i) { return 100 + i * yStep; }
+
+  // Schedule
+  const cron = '0 ' + c.hours.join(',') + ' * * *';
+  nodes.push({ id: uid(1), name: 'Schedule Trigger', type: 'n8n-nodes-base.scheduleTrigger', typeVersion: 1.1, position: [0, 400], parameters: { rule: { interval: [{ field: 'cronExpression', expression: cron }] }, timezone: c.timezone } });
+
+  // ── Built-in JSON sources ──
+  function addJsonSource(name, url, headers) {
+    const params = { method: 'GET', url };
+    if (headers) { params.sendHeaders = true; params.headerParameters = { parameters: headers }; }
+    nodes.push({ id: uid(10 + si), name, type: 'n8n-nodes-base.httpRequest', typeVersion: 4.1, position: [220, yPos(si)], continueOnFail: true, parameters: params });
+    fetchNodes.push(name);
+    si++;
+  }
+
+  if (c.useReddit)   addJsonSource('Fetch Reddit',  'https://www.reddit.com/r/' + c.subreddits + '/hot.json?limit=25', [{ name: 'User-Agent', value: 'n8n-linkedin-bot/1.0' }]);
+  if (c.useHN)       addJsonSource('Fetch HN',       'https://hn.algolia.com/api/v1/search?tags=story&query=' + encodeURIComponent(c.hnQuery) + '&hitsPerPage=15');
+  if (c.useDevto)    addJsonSource('Fetch Devto',    'https://dev.to/api/articles?tag=' + encodeURIComponent(c.devtoTag) + '&top=7&per_page=15');
+  if (c.useLobsters) addJsonSource('Fetch Lobsters', 'https://lobste.rs/t/ai.json');
+
+  // ── RSS sources (Medium, Product Hunt, custom RSS) ──
+  function addRssSource(name, url) {
+    nodes.push({ id: uid(10 + si), name, type: 'n8n-nodes-base.rssFeedRead', typeVersion: 1, position: [220, yPos(si)], continueOnFail: true, parameters: { url } });
+    fetchNodes.push(name);
+    si++;
+  }
+
+  if (c.useMedium)      addRssSource('Fetch Medium',       'https://medium.com/feed/tag/' + encodeURIComponent(c.mediumTag));
+  if (c.useProductHunt) addRssSource('Fetch ProductHunt',  'https://www.producthunt.com/feed');
+
+  // ── Custom sources ──
+  c.customSources.forEach(function(s, i) {
+    const name = 'Fetch Custom ' + (i + 1);
+    if (s.type === 'rss') {
+      addRssSource(name, s.url);
+    } else {
+      addJsonSource(name, s.url);
+    }
+  });
+
+  // ── Normalize nodes ──
+  const builtinNormCode = {
+    'Fetch Reddit':      'try {\n  var data = $input.first().json;\n  if (!data || !data.data || !data.data.children) return [{ json: { _skip: true } }];\n  var posts = data.data.children.map(function(c){ return c.data; }).filter(function(p){ return p && !p.stickied && p.score > 5 && p.title; }).map(function(p){ return { json: { title: p.title, body: (p.selftext||\'\').replace(/\\n+/g,\' \').substring(0,300), source: \'r/\'+p.subreddit, score: p.score } }; });\n  return posts.length > 0 ? posts : [{ json: { _skip: true } }];\n} catch(e) { return [{ json: { _skip: true } }]; }',
+    'Fetch HN':          'try {\n  var data = $input.first().json;\n  if (!data || !data.hits) return [{ json: { _skip: true } }];\n  var posts = data.hits.filter(function(h){ return h.title; }).map(function(h){ return { json: { title: h.title, body: (h.story_text||\'\').replace(/<[^>]*>/g,\'\').substring(0,300), source: \'Hacker News\', score: h.points||0 } }; });\n  return posts.length > 0 ? posts : [{ json: { _skip: true } }];\n} catch(e) { return [{ json: { _skip: true } }]; }',
+    'Fetch Devto':       'try {\n  var posts = $input.all().map(function(i){ return i.json; }).filter(function(a){ return a.title; }).map(function(a){ return { json: { title: a.title, body: (a.description||\'\').substring(0,300), source: \'Dev.to\', score: a.positive_reactions_count||0 } }; });\n  return posts.length > 0 ? posts : [{ json: { _skip: true } }];\n} catch(e) { return [{ json: { _skip: true } }]; }',
+    'Fetch Lobsters':    'try {\n  var posts = $input.all().map(function(i){ return i.json; }).filter(function(s){ return s.title; }).map(function(s){ return { json: { title: s.title, body: (s.description||\'\').substring(0,300), source: \'Lobste.rs\', score: s.score||0 } }; });\n  return posts.length > 0 ? posts : [{ json: { _skip: true } }];\n} catch(e) { return [{ json: { _skip: true } }]; }',
+    'Fetch Medium':      NORM_RSS('Medium'),
+    'Fetch ProductHunt': NORM_RSS('Product Hunt')
+  };
+
+  // Custom source normalize code
+  c.customSources.forEach(function(s, i) {
+    const fetchName = 'Fetch Custom ' + (i + 1);
+    const label = s.name || ('Custom ' + (i + 1));
+    if (s.type === 'rss') {
+      builtinNormCode[fetchName] = NORM_RSS(label);
+    } else if (s.type === 'json-array') {
+      builtinNormCode[fetchName] = NORM_JSON_ARRAY(label);
+    } else {
+      builtinNormCode[fetchName] = NORM_JSON_OBJECT(label);
+    }
+  });
+
+  fetchNodes.forEach(function(fn, i) {
+    const nm = 'Normalize ' + fn.replace('Fetch ', '');
+    normNodes.push(nm);
+    nodes.push({ id: uid(20 + i), name: nm, type: 'n8n-nodes-base.code', typeVersion: 2, position: [460, yPos(i)], parameters: { jsCode: builtinNormCode[fn] || NORM_JSON_OBJECT(fn) } });
+  });
+
+  // ── Merge ──
+  const mergeY = Math.round(yPos(0) + (normNodes.length - 1) * yStep / 2);
+  nodes.push({ id: uid(30), name: 'Merge All Sources', type: 'n8n-nodes-base.merge', typeVersion: 3, position: [700, mergeY], parameters: { mode: 'append', numberInputs: normNodes.length } });
+
+  // ── Build Prompt ──
+  const ind = c.industry;
+  const bpCode = [
+    'var items = $input.all().map(function(i){ return i.json; }).filter(function(i){ return !i._skip; });',
+    'if (items.length === 0) { throw new Error(\'No posts available from any source\'); }',
+    'var top = items.sort(function(a,b){ return b.score - a.score; }).slice(0, 6);',
+    'var context = top.map(function(p, i) { return \'Post \' + (i+1) + \' (\' + p.source + \', score: \' + p.score + \'):\\nTitle: \' + p.title + (p.body ? \'\\nContext: \' + p.body : \'\'); }).join(\'\\n\\n\');',
+    'var hour = new Date().getHours();',
+    'var angle;',
+    'if (hour < 12) { angle = \'Share the most interesting news or trend from these posts about ' + ind.replace(/'/g, "\\'") + '. Give your expert take. End with a thought-provoking question.\'; }',
+    'else if (hour < 17) { angle = \'Extract one practical, actionable tip from these posts about ' + ind.replace(/'/g, "\\'") + ' that professionals can apply today. Be concrete.\'; }',
+    'else { angle = \'Write about how businesses can leverage ' + ind.replace(/'/g, "\\'") + ' trends to grow or get ahead. Make it relatable and motivating.\'; }',
+    'var prompt = \'You are an expert LinkedIn content creator specializing in ' + ind.replace(/'/g, "\\'") + '.\\n\\nHere are today\\\'s trending discussions:\\n\\n\' + context + \'\\n\\nTask: \' + angle + \'\\n\\nWrite a compelling LinkedIn post. Requirements:\\n- Under 1300 characters\\n- 2-3 emojis, natural placement\\n- 4-5 relevant hashtags at the end\\n- Conversational but professional\\n- Do NOT mention source platform names or forums\\n- Sound like an original insight\';',
+    'return [{ json: { prompt: prompt } }];'
+  ].join('\n');
+  nodes.push({ id: uid(31), name: 'Build Prompt', type: 'n8n-nodes-base.code', typeVersion: 2, position: [940, mergeY], parameters: { jsCode: bpCode } });
+
+  // ── AI Generate ──
+  const prov = c.provider, key = c.apiKey, model = c.model;
+  const genName = 'Generate Post';
+  let genParams;
+  if (prov === 'anthropic') {
+    genParams = { method: 'POST', url: 'https://api.anthropic.com/v1/messages', sendHeaders: true, headerParameters: { parameters: [{ name: 'x-api-key', value: key }, { name: 'anthropic-version', value: '2023-06-01' }, { name: 'content-type', value: 'application/json' }] }, sendBody: true, contentType: 'raw', rawContentType: 'application/json', body: "={{ JSON.stringify({ model: '" + model + "', max_tokens: 600, messages: [{ role: 'user', content: $json.prompt }] }) }}" };
+  } else {
+    const ep = prov === 'openai' ? 'https://api.openai.com/v1/chat/completions' : 'https://api.groq.com/openai/v1/chat/completions';
+    genParams = { method: 'POST', url: ep, sendHeaders: true, headerParameters: { parameters: [{ name: 'Authorization', value: 'Bearer ' + key }, { name: 'Content-Type', value: 'application/json' }] }, sendBody: true, contentType: 'raw', rawContentType: 'application/json', body: "={{ JSON.stringify({ model: '" + model + "', messages: [{ role: 'user', content: $json.prompt }], max_tokens: 600, temperature: 0.82 }) }}" };
+  }
+  nodes.push({ id: uid(32), name: genName, type: 'n8n-nodes-base.httpRequest', typeVersion: 4.1, position: [1180, mergeY], parameters: genParams });
+
+  // ── Extract Post ──
+  const extractCode = prov === 'anthropic'
+    ? 'var data = $input.first().json;\nreturn [{ json: { post: data.content[0].text.trim() } }];'
+    : 'var data = $input.first().json;\nreturn [{ json: { post: data.choices[0].message.content.trim() } }];';
+  nodes.push({ id: uid(33), name: 'Extract Post', type: 'n8n-nodes-base.code', typeVersion: 2, position: [1420, mergeY], parameters: { jsCode: extractCode } });
+
+  // ── Post to LinkedIn ──
+  nodes.push({ id: uid(34), name: 'Post to LinkedIn', type: 'n8n-nodes-base.httpRequest', typeVersion: 4.1, position: [1660, mergeY], parameters: {
+    method: 'POST', url: 'https://api.linkedin.com/v2/ugcPosts',
+    sendHeaders: true, headerParameters: { parameters: [{ name: 'Authorization', value: 'Bearer ' + c.liToken }, { name: 'Content-Type', value: 'application/json' }, { name: 'X-Restli-Protocol-Version', value: '2.0.0' }] },
+    sendBody: true, contentType: 'raw', rawContentType: 'application/json',
+    body: "={{ JSON.stringify({ author: 'urn:li:person:" + c.liPid + "', lifecycleState: 'PUBLISHED', specificContent: { 'com.linkedin.ugc.ShareContent': { shareCommentary: { text: $json.post }, shareMediaCategory: 'NONE' } }, visibility: { 'com.linkedin.ugc.MemberNetworkVisibility': 'PUBLIC' } }) }}"
+  }});
+
+  // ── Connections ──
+  conn['Schedule Trigger'] = { main: [fetchNodes.map(n => ({ node: n, type: 'main', index: 0 }))] };
+  fetchNodes.forEach((fn, i) => { conn[fn] = { main: [[{ node: normNodes[i], type: 'main', index: 0 }]] }; });
+  normNodes.forEach((nn, i) => { conn[nn] = { main: [[{ node: 'Merge All Sources', type: 'main', index: i }]] }; });
+  conn['Merge All Sources'] = { main: [[{ node: 'Build Prompt', type: 'main', index: 0 }]] };
+  conn['Build Prompt']  = { main: [[{ node: genName, type: 'main', index: 0 }]] };
+  conn[genName]         = { main: [[{ node: 'Extract Post', type: 'main', index: 0 }]] };
+  conn['Extract Post']  = { main: [[{ node: 'Post to LinkedIn', type: 'main', index: 0 }]] };
+
+  return { name: ind + ' LinkedIn Auto-Post', nodes, connections: conn, settings: { executionOrder: 'v1' }, staticData: null, tags: [], pinData: {} };
+}
+
+// ── Generate & download ───────────────────────────────────────────────────────
+
+function generate() {
+  const hours = [...document.querySelectorAll('.sh:checked')].map(el => parseInt(el.value));
+  if (hours.length === 0) { alert('Select at least one posting time.'); return; }
+
+  const prov    = document.querySelector('input[name=provider]:checked').value;
+  const apiKey  = document.getElementById('api-key').value.trim();
+  const liToken = document.getElementById('li-token').value.trim();
+  const liPid   = document.getElementById('li-pid').value.trim();
+
+  if (!apiKey)  { alert('Please enter your AI provider API key.'); return; }
+  if (!liToken) { alert('Please enter your LinkedIn access token.'); return; }
+  if (!liPid)   { alert('Please enter your LinkedIn Person ID.'); return; }
+
+  const useReddit      = document.getElementById('use-reddit').checked;
+  const useHN          = document.getElementById('use-hn').checked;
+  const useDevto       = document.getElementById('use-devto').checked;
+  const useLobsters    = document.getElementById('use-lobsters').checked;
+  const useMedium      = document.getElementById('use-medium').checked;
+  const useProductHunt = document.getElementById('use-producthunt').checked;
+  const customSources  = getCustomSources();
+
+  if (!useReddit && !useHN && !useDevto && !useLobsters && !useMedium && !useProductHunt && customSources.length === 0) {
+    alert('Enable at least one content source.'); return;
+  }
+
+  const cfg = {
+    industry:     document.getElementById('industry').value.trim() || 'Business',
+    subreddits:   document.getElementById('subreddits').value.trim(),
+    hnQuery:      document.getElementById('hn-query').value.trim(),
+    devtoTag:     document.getElementById('devto-tag').value.trim() || 'programming',
+    mediumTag:    document.getElementById('medium-tag').value.trim() || 'technology',
+    useReddit, useHN, useDevto, useLobsters, useMedium, useProductHunt, customSources,
+    provider: prov, apiKey, model: document.getElementById('model').value,
+    liToken, liPid, hours,
+    timezone: document.getElementById('timezone').value
+  };
+
+  const wf   = buildWorkflow(cfg);
+  const json = JSON.stringify(wf, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url;
+  a.download = cfg.industry.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '-linkedin-workflow.json';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+init();
+</script>
+</body>
+</html>

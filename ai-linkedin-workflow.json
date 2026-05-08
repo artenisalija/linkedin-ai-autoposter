@@ -1,0 +1,240 @@
+{
+  "name": "AI LinkedIn Content Poster",
+  "nodes": [
+    {
+      "id": "1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [0, 400],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8,13,18 * * *"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "bb000001-0000-0000-0000-000000000001",
+      "name": "Fetch Reddit",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [220, 100],
+      "continueOnFail": true,
+      "parameters": {
+        "method": "GET",
+        "url": "https://www.reddit.com/r/artificial+ChatGPT+AIforsmallbusiness+automation+MachineLearning+Entrepreneur+smallbusiness/hot.json?limit=25",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "n8n-linkedin-bot/1.0"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "bb000002-0000-0000-0000-000000000002",
+      "name": "Fetch HN",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [220, 300],
+      "continueOnFail": true,
+      "parameters": {
+        "method": "GET",
+        "url": "https://hn.algolia.com/api/v1/search?tags=story&query=AI+artificial+intelligence+business+automation&hitsPerPage=15"
+      }
+    },
+    {
+      "id": "bb000003-0000-0000-0000-000000000003",
+      "name": "Fetch Devto",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [220, 500],
+      "continueOnFail": true,
+      "parameters": {
+        "method": "GET",
+        "url": "https://dev.to/api/articles?tag=ai&top=7&per_page=15"
+      }
+    },
+    {
+      "id": "bb000004-0000-0000-0000-000000000004",
+      "name": "Fetch Lobsters",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [220, 700],
+      "continueOnFail": true,
+      "parameters": {
+        "method": "GET",
+        "url": "https://lobste.rs/t/ai.json"
+      }
+    },
+    {
+      "id": "bb000005-0000-0000-0000-000000000005",
+      "name": "Normalize Reddit",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 100],
+      "parameters": {
+        "jsCode": "try {\n  const data = $input.first().json;\n  if (!data || !data.data || !data.data.children) return [{ json: { _skip: true } }];\n  const posts = data.data.children\n    .map(c => c.data)\n    .filter(p => p && !p.stickied && p.score > 5 && p.title)\n    .map(p => ({ json: {\n      title: p.title,\n      body: (p.selftext || '').replace(/\\n+/g, ' ').substring(0, 300),\n      source: 'r/' + p.subreddit,\n      score: p.score\n    }}));\n  return posts.length > 0 ? posts : [{ json: { _skip: true } }];\n} catch(e) { return [{ json: { _skip: true } }]; }"
+      }
+    },
+    {
+      "id": "bb000006-0000-0000-0000-000000000006",
+      "name": "Normalize HN",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300],
+      "parameters": {
+        "jsCode": "try {\n  const data = $input.first().json;\n  if (!data || !data.hits) return [{ json: { _skip: true } }];\n  const posts = data.hits\n    .filter(h => h.title)\n    .map(h => ({ json: {\n      title: h.title,\n      body: (h.story_text || '').replace(/<[^>]*>/g, '').substring(0, 300),\n      source: 'Hacker News',\n      score: h.points || 0\n    }}));\n  return posts.length > 0 ? posts : [{ json: { _skip: true } }];\n} catch(e) { return [{ json: { _skip: true } }]; }"
+      }
+    },
+    {
+      "id": "bb000007-0000-0000-0000-000000000007",
+      "name": "Normalize Devto",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 500],
+      "parameters": {
+        "jsCode": "try {\n  const posts = $input.all()\n    .map(i => i.json)\n    .filter(a => a.title)\n    .map(a => ({ json: {\n      title: a.title,\n      body: (a.description || '').substring(0, 300),\n      source: 'Dev.to',\n      score: a.positive_reactions_count || 0\n    }}));\n  return posts.length > 0 ? posts : [{ json: { _skip: true } }];\n} catch(e) { return [{ json: { _skip: true } }]; }"
+      }
+    },
+    {
+      "id": "bb000008-0000-0000-0000-000000000008",
+      "name": "Normalize Lobsters",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 700],
+      "parameters": {
+        "jsCode": "try {\n  const posts = $input.all()\n    .map(i => i.json)\n    .filter(s => s.title)\n    .map(s => ({ json: {\n      title: s.title,\n      body: (s.description || '').substring(0, 300),\n      source: 'Lobste.rs',\n      score: s.score || 0\n    }}));\n  return posts.length > 0 ? posts : [{ json: { _skip: true } }];\n} catch(e) { return [{ json: { _skip: true } }]; }"
+      }
+    },
+    {
+      "id": "bb000009-0000-0000-0000-000000000009",
+      "name": "Merge All Sources",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [700, 400],
+      "parameters": {
+        "mode": "append",
+        "numberInputs": 4
+      }
+    },
+    {
+      "id": "bb000010-0000-0000-0000-000000000010",
+      "name": "Build Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [940, 400],
+      "parameters": {
+        "jsCode": "const items = $input.all().map(i => i.json).filter(i => !i._skip);\n\nif (items.length === 0) {\n  throw new Error('No posts available from any source');\n}\n\nconst top = items\n  .sort((a, b) => b.score - a.score)\n  .slice(0, 6);\n\nconst context = top.map((p, i) =>\n  `Post ${i + 1} (${p.source}, score: ${p.score}):\\nTitle: ${p.title}${p.body ? '\\nContext: ' + p.body : ''}`\n).join('\\n\\n');\n\nconst hour = new Date().getHours();\nlet angle;\nif (hour < 12) {\n  angle = 'Share the most interesting AI news or trend from these posts. Give your expert take on what it means for business professionals. End with a thought-provoking question.';\n} else if (hour < 17) {\n  angle = 'Extract one practical, actionable AI tip or workflow improvement from these posts that professionals can apply today. Make it concrete with a real example.';\n} else {\n  angle = 'Write about how small businesses or solopreneurs can use AI to grow, save time, or compete smarter, inspired by these posts. Make it relatable and motivating.';\n}\n\nconst prompt = `You are an expert LinkedIn content creator specializing in AI and business.\\n\\nHere are today's trending discussions from AI and business communities:\\n\\n${context}\\n\\nTask: ${angle}\\n\\nWrite a compelling LinkedIn post based on the most relevant insight above. Requirements:\\n- Under 1300 characters\\n- 2-3 emojis (natural placement, not forced)\\n- 4-5 relevant hashtags at the end\\n- Conversational but professional tone\\n- Do NOT mention Reddit, Hacker News, Dev.to, Lobste.rs, or that this came from a forum\\n- Make it feel like an original insight or observation`;\n\nreturn [{ json: { prompt, sourcesUsed: [...new Set(top.map(p => p.source))], postCount: top.length } }];"
+      }
+    },
+    {
+      "id": "bb000011-0000-0000-0000-000000000011",
+      "name": "Generate Post with Groq",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1180, 400],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_GROQ_API_KEY"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ model: 'llama-3.3-70b-versatile', messages: [{ role: 'user', content: $json.prompt }], max_tokens: 600, temperature: 0.82 }) }}"
+      }
+    },
+    {
+      "id": "bb000012-0000-0000-0000-000000000012",
+      "name": "Extract Post",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1420, 400],
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nconst post = data.choices[0].message.content.trim();\nreturn [{ json: { post } }];"
+      }
+    },
+    {
+      "id": "bb000013-0000-0000-0000-000000000013",
+      "name": "Post to LinkedIn",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1660, 400],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.linkedin.com/v2/ugcPosts",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_LINKEDIN_ACCESS_TOKEN"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "X-Restli-Protocol-Version",
+              "value": "2.0.0"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ author: 'urn:li:person:YOUR_LINKEDIN_PERSON_ID', lifecycleState: 'PUBLISHED', specificContent: { 'com.linkedin.ugc.ShareContent': { shareCommentary: { text: $json.post }, shareMediaCategory: 'NONE' } }, visibility: { 'com.linkedin.ugc.MemberNetworkVisibility': 'PUBLIC' } }) }}"
+      }
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          { "node": "Fetch Reddit",   "type": "main", "index": 0 },
+          { "node": "Fetch HN",       "type": "main", "index": 0 },
+          { "node": "Fetch Devto",    "type": "main", "index": 0 },
+          { "node": "Fetch Lobsters", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Fetch Reddit":   { "main": [[{ "node": "Normalize Reddit",   "type": "main", "index": 0 }]] },
+    "Fetch HN":       { "main": [[{ "node": "Normalize HN",       "type": "main", "index": 0 }]] },
+    "Fetch Devto":    { "main": [[{ "node": "Normalize Devto",    "type": "main", "index": 0 }]] },
+    "Fetch Lobsters": { "main": [[{ "node": "Normalize Lobsters", "type": "main", "index": 0 }]] },
+    "Normalize Reddit":   { "main": [[{ "node": "Merge All Sources", "type": "main", "index": 0 }]] },
+    "Normalize HN":       { "main": [[{ "node": "Merge All Sources", "type": "main", "index": 1 }]] },
+    "Normalize Devto":    { "main": [[{ "node": "Merge All Sources", "type": "main", "index": 2 }]] },
+    "Normalize Lobsters": { "main": [[{ "node": "Merge All Sources", "type": "main", "index": 3 }]] },
+    "Merge All Sources":      { "main": [[{ "node": "Build Prompt",           "type": "main", "index": 0 }]] },
+    "Build Prompt":           { "main": [[{ "node": "Generate Post with Groq","type": "main", "index": 0 }]] },
+    "Generate Post with Groq":{ "main": [[{ "node": "Extract Post",           "type": "main", "index": 0 }]] },
+    "Extract Post":           { "main": [[{ "node": "Post to LinkedIn",       "type": "main", "index": 0 }]] }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "pinData": {}
+}
