@@ -541,19 +541,38 @@ function buildWorkflow(c) {
 
   // ── Build Prompt ──
   const ind = c.industry;
-  const bpCode = [
-    'var items = $input.all().map(function(i){ return i.json; }).filter(function(i){ return !i._skip; });',
-    'if (items.length === 0) { throw new Error(\'No posts available from any source\'); }',
-    'var top = items.sort(function(a,b){ return b.score - a.score; }).slice(0, 6);',
-    'var context = top.map(function(p, i) { return \'Post \' + (i+1) + \' (\' + p.source + \', score: \' + p.score + \'):\\nTitle: \' + p.title + (p.body ? \'\\nContext: \' + p.body : \'\'); }).join(\'\\n\\n\');',
-    'var hour = new Date().getHours();',
-    'var angle;',
-    'if (hour < 12) { angle = \'Share the most interesting news or trend from these posts about ' + ind.replace(/'/g, "\\'") + '. Give your expert take. End with a thought-provoking question.\'; }',
-    'else if (hour < 17) { angle = \'Extract one practical, actionable tip from these posts about ' + ind.replace(/'/g, "\\'") + ' that professionals can apply today. Be concrete.\'; }',
-    'else { angle = \'Write about how businesses can leverage ' + ind.replace(/'/g, "\\'") + ' trends to grow or get ahead. Make it relatable and motivating.\'; }',
-    'var prompt = \'You are an expert LinkedIn content creator specializing in ' + ind.replace(/'/g, "\\'") + '.\\n\\nHere are today\\\'s trending discussions:\\n\\n\' + context + \'\\n\\nTask: \' + angle + \'\\n\\nWrite a compelling LinkedIn post. Requirements:\\n- Under 1300 characters\\n- 2-3 emojis, natural placement\\n- 4-5 relevant hashtags at the end\\n- Conversational but professional\\n- Do NOT mention source platform names or forums\\n- Sound like an original insight\';',
-    'return [{ json: { prompt: prompt } }];'
-  ].join('\n');
+  const escapedInd = ind.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  const bpCode = `var industry = '${escapedInd}';
+var staticData = $getWorkflowStaticData('global');
+if (!staticData.usedTitles) staticData.usedTitles = [];
+var usedSet = {};
+staticData.usedTitles.slice(-50).forEach(function(t){ usedSet[t] = true; });
+var items = $input.all().map(function(i){ return i.json; }).filter(function(i){ return !i._skip; });
+if (items.length === 0) { throw new Error('No posts available from any source'); }
+var fresh = items.filter(function(p){ return !usedSet[p.title]; });
+var pool = fresh.length >= 4 ? fresh : items;
+var bySource = {};
+pool.forEach(function(p) { if (!bySource[p.source]) bySource[p.source] = []; bySource[p.source].push(p); });
+var diverse = [];
+Object.keys(bySource).forEach(function(src) { bySource[src].sort(function(a,b){ return b.score - a.score; }).slice(0, 3).forEach(function(p){ diverse.push(p); }); });
+diverse.sort(function(a,b){ return b.score - a.score; });
+var top8 = diverse.slice(0, 8);
+for (var i = top8.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var tmp = top8[i]; top8[i] = top8[j]; top8[j] = tmp; }
+var selected = top8.slice(0, 6);
+staticData.usedTitles = staticData.usedTitles.concat(selected.map(function(p){ return p.title; })).slice(-50);
+var context = selected.map(function(p, i) { return 'Post ' + (i+1) + ' (' + p.source + ', score: ' + p.score + '):\\nTitle: ' + p.title + (p.body ? '\\nContext: ' + p.body : ''); }).join('\\n\\n');
+if (!staticData.formatIndex) staticData.formatIndex = 0;
+var formatIdx = staticData.formatIndex % 4;
+staticData.formatIndex = formatIdx + 1;
+var formats = [
+  { name: 'bullet-insight', template: 'Hook (bold claim, surprising stat, or number — NEVER "As a" or "As AI")\\n\\n1-2 sentences of context.\\n\\nHere\\'s what this means:\\n• [First key point]\\n• [Second key point]\\n• [Third key point]\\n\\n[Closing thought or question]\\n\\n#hashtag1 #hashtag2 #hashtag3', instruction: 'Open with a scroll-stopping hook. Use the • bullet structure exactly as shown.' },
+  { name: 'arrow-list', template: '[Bold opener — NOT "As a...". Try "Nobody talks about...", "The real reason...", or a surprising number]\\n\\n[1-2 sentences of context]\\n\\n[Topic] changed when:\\n→ [First shift]\\n→ [Second shift]\\n→ [Third shift]\\n\\n[What this means for small businesses — 1 sentence]\\n\\n[Question to the reader?]\\n\\n#hashtag1 #hashtag2 #hashtag3', instruction: 'Write about a shift or change. Use → arrows as bullets, not dashes.' },
+  { name: 'checklist', template: '[Opening — a surprising fact, bold opinion, or "X things" hook. Never "As a..."]\\n\\n[Quick story or situation — 2 sentences max]\\n\\nThe playbook:\\n✅ [Actionable tip 1]\\n✅ [Actionable tip 2]\\n✅ [Actionable tip 3]\\n✅ [Actionable tip 4]\\n\\n[Result or outcome — 1 sentence]\\n\\n#hashtag1 #hashtag2 #hashtag3', instruction: 'Make it a tactical cheat sheet. Use ✅ checkmarks. Be concrete and specific.' },
+  { name: 'story-hook', template: '[Unexpected opener — try "Last week...", "I used to think..." or a myth-bust. Never "As a..."]\\n\\n[2-3 sentences developing the idea]\\n\\nWhat most people miss:\\n▸ [Insight 1]\\n▸ [Insight 2]\\n▸ [Insight 3]\\n\\n[Your take — 1-2 sentences]\\n\\n[Question or call to action]\\n\\n#hashtag1 #hashtag2 #hashtag3', instruction: 'Lead with a story or myth-bust. Use ▸ bullets for the insight list.' }
+];
+var fmt = formats[formatIdx];
+var prompt = 'You are an expert LinkedIn content creator for ' + industry + '. Your posts feel human, specific, and fresh — never generic.\\n\\nHere are today\\'s trending discussions:\\n\\n' + context + '\\n\\nTask: Write a LinkedIn post inspired by the most interesting insight above.\\n\\nUse EXACTLY this format:\\n' + fmt.template + '\\n\\nRules:\\n- NEVER start with "As a", "As AI", "In today\\'s", or any "As [noun]" opener\\n- NEVER use filler words: "game-changer", "dive into", "leverage", "unlock", "landscape", "delve"\\n- ' + fmt.instruction + '\\n- 1-2 emojis maximum, placed naturally\\n- Under 1300 characters total\\n- Conversational but sharp — write like a practitioner, not a consultant\\n- Do NOT mention Reddit, Hacker News, Dev.to, Lobste.rs, or forums';
+return [{ json: { prompt: prompt, format: fmt.name } }];`;
   nodes.push({ id: uid(31), name: 'Build Prompt', type: 'n8n-nodes-base.code', typeVersion: 2, position: [940, mergeY], parameters: { jsCode: bpCode } });
 
   // ── AI Generate ──
@@ -574,10 +593,22 @@ function buildWorkflow(c) {
     : 'var data = $input.first().json;\nreturn [{ json: { post: data.choices[0].message.content.trim() } }];';
   nodes.push({ id: uid(33), name: 'Extract Post', type: 'n8n-nodes-base.code', typeVersion: 2, position: [1420, mergeY], parameters: { jsCode: extractCode } });
 
+  // ── Check Duplicate Post ──
+  const checkDupeCode = `var post = $input.first().json.post;
+var fingerprint = post.substring(0, 150).toLowerCase().replace(/\\s+/g, ' ').trim();
+var staticData = $getWorkflowStaticData('global');
+if (!staticData.postedFingerprints) staticData.postedFingerprints = [];
+if (staticData.postedFingerprints.indexOf(fingerprint) !== -1) {
+  throw new Error('Duplicate post detected — skipping to avoid reposting identical content');
+}
+staticData.postedFingerprints = staticData.postedFingerprints.concat([fingerprint]).slice(-100);
+return [{ json: { post: post } }];`;
+  nodes.push({ id: uid(36), name: 'Check Duplicate Post', type: 'n8n-nodes-base.code', typeVersion: 2, position: [1580, mergeY], parameters: { jsCode: checkDupeCode } });
+
   // ── Refresh LinkedIn Token (optional) ──
   const hasRefresh = c.liRefreshToken && c.liClientId && c.liClientSecret;
   if (hasRefresh) {
-    nodes.push({ id: uid(34), name: 'Refresh LinkedIn Token', type: 'n8n-nodes-base.httpRequest', typeVersion: 4.1, position: [1660, mergeY], parameters: {
+    nodes.push({ id: uid(34), name: 'Refresh LinkedIn Token', type: 'n8n-nodes-base.httpRequest', typeVersion: 4.1, position: [1780, mergeY], parameters: {
       method: 'POST', url: 'https://www.linkedin.com/oauth/v2/accessToken',
       sendBody: true, contentType: 'form-urlencoded',
       bodyParameters: { parameters: [
@@ -590,7 +621,7 @@ function buildWorkflow(c) {
   }
 
   // ── Post to LinkedIn ──
-  const liPostX = hasRefresh ? 1900 : 1660;
+  const liPostX = hasRefresh ? 1980 : 1780;
   const liAuthValue = hasRefresh ? '=Bearer {{ $json.access_token }}' : 'Bearer ' + c.liToken;
   const liPostText  = hasRefresh ? "$('Extract Post').first().json.post" : '$json.post';
   nodes.push({ id: uid(35), name: 'Post to LinkedIn', type: 'n8n-nodes-base.httpRequest', typeVersion: 4.1, position: [liPostX, mergeY], parameters: {
@@ -607,11 +638,12 @@ function buildWorkflow(c) {
   conn['Merge All Sources'] = { main: [[{ node: 'Build Prompt', type: 'main', index: 0 }]] };
   conn['Build Prompt']  = { main: [[{ node: genName, type: 'main', index: 0 }]] };
   conn[genName]         = { main: [[{ node: 'Extract Post', type: 'main', index: 0 }]] };
+  conn['Extract Post'] = { main: [[{ node: 'Check Duplicate Post', type: 'main', index: 0 }]] };
   if (hasRefresh) {
-    conn['Extract Post']           = { main: [[{ node: 'Refresh LinkedIn Token', type: 'main', index: 0 }]] };
+    conn['Check Duplicate Post']   = { main: [[{ node: 'Refresh LinkedIn Token', type: 'main', index: 0 }]] };
     conn['Refresh LinkedIn Token'] = { main: [[{ node: 'Post to LinkedIn', type: 'main', index: 0 }]] };
   } else {
-    conn['Extract Post'] = { main: [[{ node: 'Post to LinkedIn', type: 'main', index: 0 }]] };
+    conn['Check Duplicate Post'] = { main: [[{ node: 'Post to LinkedIn', type: 'main', index: 0 }]] };
   }
 
   return { name: ind + ' LinkedIn Auto-Post', nodes, connections: conn, settings: { executionOrder: 'v1' }, staticData: null, tags: [], pinData: {} };
