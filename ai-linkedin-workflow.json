@@ -1,245 +1,427 @@
-{
-  "name": "AI LinkedIn Content Poster",
-  "nodes": [
-    {
-      "id": "1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d",
-      "name": "Schedule Trigger",
-      "type": "n8n-nodes-base.scheduleTrigger",
-      "typeVersion": 1.1,
-      "position": [0, 400],
-      "parameters": {
-        "timezone": "Europe/Berlin",
-        "rule": {
-          "interval": [
-            {
-              "field": "cronExpression",
-              "expression": "0 7,10,13,16,19 * * *"
-            },
-            {
-              "field": "cronExpression",
-              "expression": "40 17 * * *"
-            }
-          ]
-        }
-      }
-    },
-    {
-      "id": "bb000001-0000-0000-0000-000000000001",
-      "name": "Fetch Reddit",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
-      "position": [220, 100],
-      "continueOnFail": true,
-      "parameters": {
-        "method": "GET",
-        "url": "https://www.reddit.com/r/artificial+ChatGPT+AIforsmallbusiness+automation+MachineLearning+Entrepreneur+smallbusiness/hot.json?limit=25",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "User-Agent",
-              "value": "n8n-linkedin-bot/1.0"
-            }
-          ]
-        }
-      }
-    },
-    {
-      "id": "bb000002-0000-0000-0000-000000000002",
-      "name": "Fetch HN",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
-      "position": [220, 300],
-      "continueOnFail": true,
-      "parameters": {
-        "method": "GET",
-        "url": "https://hn.algolia.com/api/v1/search?tags=story&query=AI+artificial+intelligence+business+automation&hitsPerPage=15"
-      }
-    },
-    {
-      "id": "bb000003-0000-0000-0000-000000000003",
-      "name": "Fetch Devto",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
-      "position": [220, 500],
-      "continueOnFail": true,
-      "parameters": {
-        "method": "GET",
-        "url": "https://dev.to/api/articles?tag=ai&top=7&per_page=15"
-      }
-    },
-    {
-      "id": "bb000004-0000-0000-0000-000000000004",
-      "name": "Fetch Lobsters",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
-      "position": [220, 700],
-      "continueOnFail": true,
-      "parameters": {
-        "method": "GET",
-        "url": "https://lobste.rs/t/ai.json"
-      }
-    },
-    {
-      "id": "bb000005-0000-0000-0000-000000000005",
-      "name": "Normalize Reddit",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [460, 100],
-      "parameters": {
-        "jsCode": "try {\n  const data = $input.first().json;\n  if (!data || !data.data || !data.data.children) return [{ json: { _skip: true } }];\n  const posts = data.data.children\n    .map(c => c.data)\n    .filter(p => p && !p.stickied && p.score > 5 && p.title)\n    .map(p => ({ json: {\n      title: p.title,\n      body: (p.selftext || '').replace(/\\n+/g, ' ').substring(0, 300),\n      source: 'r/' + p.subreddit,\n      score: p.score\n    }}));\n  return posts.length > 0 ? posts : [{ json: { _skip: true } }];\n} catch(e) { return [{ json: { _skip: true } }]; }"
-      }
-    },
-    {
-      "id": "bb000006-0000-0000-0000-000000000006",
-      "name": "Normalize HN",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [460, 300],
-      "parameters": {
-        "jsCode": "try {\n  const data = $input.first().json;\n  if (!data || !data.hits) return [{ json: { _skip: true } }];\n  const posts = data.hits\n    .filter(h => h.title)\n    .map(h => ({ json: {\n      title: h.title,\n      body: (h.story_text || '').replace(/<[^>]*>/g, '').substring(0, 300),\n      source: 'Hacker News',\n      score: h.points || 0\n    }}));\n  return posts.length > 0 ? posts : [{ json: { _skip: true } }];\n} catch(e) { return [{ json: { _skip: true } }]; }"
-      }
-    },
-    {
-      "id": "bb000007-0000-0000-0000-000000000007",
-      "name": "Normalize Devto",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [460, 500],
-      "parameters": {
-        "jsCode": "try {\n  const posts = $input.all()\n    .map(i => i.json)\n    .filter(a => a.title)\n    .map(a => ({ json: {\n      title: a.title,\n      body: (a.description || '').substring(0, 300),\n      source: 'Dev.to',\n      score: a.positive_reactions_count || 0\n    }}));\n  return posts.length > 0 ? posts : [{ json: { _skip: true } }];\n} catch(e) { return [{ json: { _skip: true } }]; }"
-      }
-    },
-    {
-      "id": "bb000008-0000-0000-0000-000000000008",
-      "name": "Normalize Lobsters",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [460, 700],
-      "parameters": {
-        "jsCode": "try {\n  const posts = $input.all()\n    .map(i => i.json)\n    .filter(s => s.title)\n    .map(s => ({ json: {\n      title: s.title,\n      body: (s.description || '').substring(0, 300),\n      source: 'Lobste.rs',\n      score: s.score || 0\n    }}));\n  return posts.length > 0 ? posts : [{ json: { _skip: true } }];\n} catch(e) { return [{ json: { _skip: true } }]; }"
-      }
-    },
-    {
-      "id": "bb000009-0000-0000-0000-000000000009",
-      "name": "Merge All Sources",
-      "type": "n8n-nodes-base.merge",
-      "typeVersion": 3,
-      "position": [700, 400],
-      "parameters": {
-        "mode": "append",
-        "numberInputs": 4
-      }
-    },
-    {
-      "id": "bb000010-0000-0000-0000-000000000010",
-      "name": "Build Prompt",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [940, 400],
-      "parameters": {
-        "jsCode": "const items = $input.all().map(i => i.json).filter(i => !i._skip);\n\nif (items.length === 0) {\n  throw new Error('No posts available from any source');\n}\n\nconst top = items\n  .sort((a, b) => b.score - a.score)\n  .slice(0, 6);\n\nconst context = top.map((p, i) =>\n  `Post ${i + 1} (${p.source}, score: ${p.score}):\\nTitle: ${p.title}${p.body ? '\\nContext: ' + p.body : ''}`\n).join('\\n\\n');\n\nconst hour = new Date().getHours();\nlet angle;\nif (hour < 12) {\n  angle = 'Share the most interesting AI news or trend from these posts. Give your expert take on what it means for business professionals. End with a thought-provoking question.';\n} else if (hour < 17) {\n  angle = 'Extract one practical, actionable AI tip or workflow improvement from these posts that professionals can apply today. Make it concrete with a real example.';\n} else {\n  angle = 'Write about how small businesses or solopreneurs can use AI to grow, save time, or compete smarter, inspired by these posts. Make it relatable and motivating.';\n}\n\nconst prompt = `You are an expert LinkedIn content creator specializing in AI and business.\\n\\nHere are today's trending discussions from AI and business communities:\\n\\n${context}\\n\\nTask: ${angle}\\n\\nWrite a compelling LinkedIn post based on the most relevant insight above. Requirements:\\n- Under 1300 characters\\n- 2-3 emojis (natural placement, not forced)\\n- 4-5 relevant hashtags at the end\\n- Conversational but professional tone\\n- Do NOT mention Reddit, Hacker News, Dev.to, Lobste.rs, or that this came from a forum\\n- Make it feel like an original insight or observation`;\n\nreturn [{ json: { prompt, sourcesUsed: [...new Set(top.map(p => p.source))], postCount: top.length } }];"
-      }
-    },
-    {
-      "id": "bb000011-0000-0000-0000-000000000011",
-      "name": "Generate Post with Groq",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
-      "position": [1180, 400],
-      "parameters": {
-        "method": "POST",
-        "url": "https://api.groq.com/openai/v1/chat/completions",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Authorization",
-              "value": "Bearer YOUR_GROQ_API_KEY"
-            },
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            }
-          ]
-        },
-        "sendBody": true,
-        "contentType": "raw",
-        "rawContentType": "application/json",
-        "body": "={{ JSON.stringify({ model: 'llama-3.3-70b-versatile', messages: [{ role: 'user', content: $json.prompt }], max_tokens: 600, temperature: 0.82 }) }}"
-      }
-    },
-    {
-      "id": "bb000012-0000-0000-0000-000000000012",
-      "name": "Extract Post",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [1420, 400],
-      "parameters": {
-        "jsCode": "const data = $input.first().json;\nconst post = data.choices[0].message.content.trim();\nreturn [{ json: { post } }];"
-      }
-    },
-    {
-      "id": "bb000013-0000-0000-0000-000000000013",
-      "name": "Post to LinkedIn",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
-      "position": [1660, 400],
-      "parameters": {
-        "method": "POST",
-        "url": "https://api.linkedin.com/v2/ugcPosts",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Authorization",
-              "value": "Bearer YOUR_LINKEDIN_ACCESS_TOKEN"
-            },
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            },
-            {
-              "name": "X-Restli-Protocol-Version",
-              "value": "2.0.0"
-            }
-          ]
-        },
-        "sendBody": true,
-        "contentType": "raw",
-        "rawContentType": "application/json",
-        "body": "={{ JSON.stringify({ author: 'urn:li:person:YOUR_LINKEDIN_PERSON_ID', lifecycleState: 'PUBLISHED', specificContent: { 'com.linkedin.ugc.ShareContent': { shareCommentary: { text: $json.post }, shareMediaCategory: 'NONE' } }, visibility: { 'com.linkedin.ugc.MemberNetworkVisibility': 'PUBLIC' } }) }}"
-      }
-    }
-  ],
-  "connections": {
-    "Schedule Trigger": {
-      "main": [
-        [
-          { "node": "Fetch Reddit",   "type": "main", "index": 0 },
-          { "node": "Fetch HN",       "type": "main", "index": 0 },
-          { "node": "Fetch Devto",    "type": "main", "index": 0 },
-          { "node": "Fetch Lobsters", "type": "main", "index": 0 }
-        ]
-      ]
-    },
-    "Fetch Reddit":   { "main": [[{ "node": "Normalize Reddit",   "type": "main", "index": 0 }]] },
-    "Fetch HN":       { "main": [[{ "node": "Normalize HN",       "type": "main", "index": 0 }]] },
-    "Fetch Devto":    { "main": [[{ "node": "Normalize Devto",    "type": "main", "index": 0 }]] },
-    "Fetch Lobsters": { "main": [[{ "node": "Normalize Lobsters", "type": "main", "index": 0 }]] },
-    "Normalize Reddit":   { "main": [[{ "node": "Merge All Sources", "type": "main", "index": 0 }]] },
-    "Normalize HN":       { "main": [[{ "node": "Merge All Sources", "type": "main", "index": 1 }]] },
-    "Normalize Devto":    { "main": [[{ "node": "Merge All Sources", "type": "main", "index": 2 }]] },
-    "Normalize Lobsters": { "main": [[{ "node": "Merge All Sources", "type": "main", "index": 3 }]] },
-    "Merge All Sources":      { "main": [[{ "node": "Build Prompt",           "type": "main", "index": 0 }]] },
-    "Build Prompt":           { "main": [[{ "node": "Generate Post with Groq","type": "main", "index": 0 }]] },
-    "Generate Post with Groq":{ "main": [[{ "node": "Extract Post",           "type": "main", "index": 0 }]] },
-    "Extract Post":           { "main": [[{ "node": "Post to LinkedIn",       "type": "main", "index": 0 }]] }
-  },
-  "settings": {
-    "executionOrder": "v1"
-  },
-  "staticData": null,
-  "tags": [],
-  "pinData": {}
+﻿{
+    "name":  "AI LinkedIn Content Poster",
+    "nodes":  [
+                  {
+                      "id":  "1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d",
+                      "name":  "Schedule Trigger",
+                      "type":  "n8n-nodes-base.scheduleTrigger",
+                      "typeVersion":  1.1,
+                      "position":  [
+                                       0,
+                                       400
+                                   ],
+                      "parameters":  {
+                                         "timezone":  "Europe/Berlin",
+                                         "rule":  {
+                                                      "interval":  [
+                                                                       {
+                                                                           "field":  "cronExpression",
+                                                                           "expression":  "0 7,10,13,16,19 * * *"
+                                                                       },
+                                                                       {
+                                                                           "field":  "cronExpression",
+                                                                           "expression":  "40 17 * * *"
+                                                                       }
+                                                                   ]
+                                                  }
+                                     }
+                  },
+                  {
+                      "id":  "bb000001-0000-0000-0000-000000000001",
+                      "name":  "Fetch Reddit",
+                      "type":  "n8n-nodes-base.httpRequest",
+                      "typeVersion":  4.1,
+                      "position":  [
+                                       220,
+                                       100
+                                   ],
+                      "continueOnFail":  true,
+                      "parameters":  {
+                                         "method":  "GET",
+                                         "url":  "https://www.reddit.com/r/artificial+ChatGPT+AIforsmallbusiness+automation+MachineLearning+Entrepreneur+smallbusiness/hot.json?limit=25",
+                                         "sendHeaders":  true,
+                                         "headerParameters":  {
+                                                                  "parameters":  [
+                                                                                     {
+                                                                                         "name":  "User-Agent",
+                                                                                         "value":  "n8n-linkedin-bot/1.0"
+                                                                                     }
+                                                                                 ]
+                                                              }
+                                     }
+                  },
+                  {
+                      "id":  "bb000002-0000-0000-0000-000000000002",
+                      "name":  "Fetch HN",
+                      "type":  "n8n-nodes-base.httpRequest",
+                      "typeVersion":  4.1,
+                      "position":  [
+                                       220,
+                                       300
+                                   ],
+                      "continueOnFail":  true,
+                      "parameters":  {
+                                         "method":  "GET",
+                                         "url":  "https://hn.algolia.com/api/v1/search?tags=story\u0026query=AI+artificial+intelligence+business+automation\u0026hitsPerPage=15"
+                                     }
+                  },
+                  {
+                      "id":  "bb000003-0000-0000-0000-000000000003",
+                      "name":  "Fetch Devto",
+                      "type":  "n8n-nodes-base.httpRequest",
+                      "typeVersion":  4.1,
+                      "position":  [
+                                       220,
+                                       500
+                                   ],
+                      "continueOnFail":  true,
+                      "parameters":  {
+                                         "method":  "GET",
+                                         "url":  "https://dev.to/api/articles?tag=ai\u0026top=7\u0026per_page=15"
+                                     }
+                  },
+                  {
+                      "id":  "bb000004-0000-0000-0000-000000000004",
+                      "name":  "Fetch Lobsters",
+                      "type":  "n8n-nodes-base.httpRequest",
+                      "typeVersion":  4.1,
+                      "position":  [
+                                       220,
+                                       700
+                                   ],
+                      "continueOnFail":  true,
+                      "parameters":  {
+                                         "method":  "GET",
+                                         "url":  "https://lobste.rs/t/ai.json"
+                                     }
+                  },
+                  {
+                      "id":  "bb000005-0000-0000-0000-000000000005",
+                      "name":  "Normalize Reddit",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       460,
+                                       100
+                                   ],
+                      "parameters":  {
+                                         "jsCode":  "try {\n  const data = $input.first().json;\n  if (!data || !data.data || !data.data.children) return [{ json: { _skip: true } }];\n  const posts = data.data.children\n    .map(c =\u003e c.data)\n    .filter(p =\u003e p \u0026\u0026 !p.stickied \u0026\u0026 p.score \u003e 5 \u0026\u0026 p.title)\n    .map(p =\u003e ({ json: {\n      title: p.title,\n      body: (p.selftext || \u0027\u0027).replace(/\\n+/g, \u0027 \u0027).substring(0, 300),\n      source: \u0027r/\u0027 + p.subreddit,\n      score: p.score\n    }}));\n  return posts.length \u003e 0 ? posts : [{ json: { _skip: true } }];\n} catch(e) { return [{ json: { _skip: true } }]; }"
+                                     }
+                  },
+                  {
+                      "id":  "bb000006-0000-0000-0000-000000000006",
+                      "name":  "Normalize HN",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       460,
+                                       300
+                                   ],
+                      "parameters":  {
+                                         "jsCode":  "try {\n  const data = $input.first().json;\n  if (!data || !data.hits) return [{ json: { _skip: true } }];\n  const posts = data.hits\n    .filter(h =\u003e h.title)\n    .map(h =\u003e ({ json: {\n      title: h.title,\n      body: (h.story_text || \u0027\u0027).replace(/\u003c[^\u003e]*\u003e/g, \u0027\u0027).substring(0, 300),\n      source: \u0027Hacker News\u0027,\n      score: h.points || 0\n    }}));\n  return posts.length \u003e 0 ? posts : [{ json: { _skip: true } }];\n} catch(e) { return [{ json: { _skip: true } }]; }"
+                                     }
+                  },
+                  {
+                      "id":  "bb000007-0000-0000-0000-000000000007",
+                      "name":  "Normalize Devto",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       460,
+                                       500
+                                   ],
+                      "parameters":  {
+                                         "jsCode":  "try {\n  const posts = $input.all()\n    .map(i =\u003e i.json)\n    .filter(a =\u003e a.title)\n    .map(a =\u003e ({ json: {\n      title: a.title,\n      body: (a.description || \u0027\u0027).substring(0, 300),\n      source: \u0027Dev.to\u0027,\n      score: a.positive_reactions_count || 0\n    }}));\n  return posts.length \u003e 0 ? posts : [{ json: { _skip: true } }];\n} catch(e) { return [{ json: { _skip: true } }]; }"
+                                     }
+                  },
+                  {
+                      "id":  "bb000008-0000-0000-0000-000000000008",
+                      "name":  "Normalize Lobsters",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       460,
+                                       700
+                                   ],
+                      "parameters":  {
+                                         "jsCode":  "try {\n  const posts = $input.all()\n    .map(i =\u003e i.json)\n    .filter(s =\u003e s.title)\n    .map(s =\u003e ({ json: {\n      title: s.title,\n      body: (s.description || \u0027\u0027).substring(0, 300),\n      source: \u0027Lobste.rs\u0027,\n      score: s.score || 0\n    }}));\n  return posts.length \u003e 0 ? posts : [{ json: { _skip: true } }];\n} catch(e) { return [{ json: { _skip: true } }]; }"
+                                     }
+                  },
+                  {
+                      "id":  "bb000009-0000-0000-0000-000000000009",
+                      "name":  "Merge All Sources",
+                      "type":  "n8n-nodes-base.merge",
+                      "typeVersion":  3,
+                      "position":  [
+                                       700,
+                                       400
+                                   ],
+                      "parameters":  {
+                                         "mode":  "append",
+                                         "numberInputs":  4
+                                     }
+                  },
+                  {
+                      "id":  "bb000010-0000-0000-0000-000000000010",
+                      "name":  "Build Prompt",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       940,
+                                       400
+                                   ],
+                      "parameters":  {
+                                         "jsCode":  "const staticData = $getWorkflowStaticData(\u0027global\u0027);\nif (!staticData.usedTitles) staticData.usedTitles = [];\n\nconst usedSet = new Set(staticData.usedTitles.slice(-50));\n\nconst items = $input.all().map(i =\u003e i.json).filter(i =\u003e !i._skip);\n\nif (items.length === 0) {\n  throw new Error(\u0027No posts available from any source\u0027);\n}\n\nconst fresh = items.filter(p =\u003e !usedSet.has(p.title));\nconst pool = fresh.length \u003e= 4 ? fresh : items;\n\nconst bySource = {};\nfor (const p of pool) {\n  if (!bySource[p.source]) bySource[p.source] = [];\n  bySource[p.source].push(p);\n}\n\nconst diverse = [];\nfor (const src of Object.keys(bySource)) {\n  bySource[src].sort((a, b) =\u003e b.score - a.score).slice(0, 3).forEach(p =\u003e diverse.push(p));\n}\n\ndiverse.sort((a, b) =\u003e b.score - a.score);\nconst top8 = diverse.slice(0, 8);\nfor (let i = top8.length - 1; i \u003e 0; i--) {\n  const j = Math.floor(Math.random() * (i + 1));\n  [top8[i], top8[j]] = [top8[j], top8[i]];\n}\nconst selected = top8.slice(0, 6);\n\nstaticData.usedTitles = [...staticData.usedTitles, ...selected.map(p =\u003e p.title)].slice(-50);\n\nconst context = selected.map((p, i) =\u003e\n  `Post ${i + 1} (${p.source}, score: ${p.score}):\\nTitle: ${p.title}${p.body ? \u0027\\nContext: \u0027 + p.body : \u0027\u0027}`\n).join(\u0027\\n\\n\u0027);\n\nif (!staticData.formatIndex) staticData.formatIndex = 0;\nif (!staticData.ctaIndex) staticData.ctaIndex = 0;\n\nconst formatIdx = staticData.formatIndex % 6;\nstaticData.formatIndex = formatIdx + 1;\n\nconst ctaIdx = staticData.ctaIndex % 5;\nstaticData.ctaIndex = ctaIdx + 1;\n\n// CUSTOMISE: Replace these CTAs with your own offer / niche\nconst ctas = [\n  \u0027Thinking about AI or automation for your business? DM me — I am always happy to have that conversation.\u0027,\n  \u0027Want to talk about what AI and automation could do for your workflow? Drop me a message — let us chat.\u0027,\n  \u0027Curious where AI or automation could fit in your business? I love these conversations — DM me anytime.\u0027,\n  \u0027If you want to explore AI and automation for your own business, send me a message — happy to help you think it through.\u0027,\n  \u0027Want to start a conversation about AI or automation? That is exactly what I am here for — DM me.\u0027\n];\n\nconst cta = ctas[ctaIdx];\n\nconst formats = [\n  {\n    name: \u0027contrarian-take\u0027,\n    template: `[ONE bold sentence that contradicts common advice — use a specific number, tool name, or real example]\\n\\n[2 sentences explaining what is actually true]\\n\\nWhy this matters:\\n• [Specific, concrete implication with a detail]\\n• [Specific, concrete implication with a detail]\\n• [Specific, concrete implication with a detail]\\n\\n${cta}\\n\\n#hashtag1 #hashtag2 #hashtag3`,\n    instruction: `Lead with a take that sounds slightly controversial but is defensible. Ground every bullet in a specific detail — a number, a tool name, or a concrete action. No two bullets can start with the same word.`\n  },\n  {\n    name: \u0027before-after\u0027,\n    template: `[Hook — describe a painful before state in one punchy sentence. Never \"As a...\"]\\n\\n[1-2 sentences on what changed and why]\\n\\nBefore:\\n✗ [Specific old way — relatable and frustrating]\\n✗ [Another painful old approach with a concrete detail]\\n\\nAfter:\\n✓ [Concrete new outcome — name a tool or method]\\n✓ [Second concrete win with a specific measurable detail]\\n\\n[One sentence on who this matters to most]\\n\\n${cta}\\n\\n#hashtag1 #hashtag2 #hashtag3`,\n    instruction: `Use ✗ and ✓ symbols exactly as shown. The before must feel real and frustrating. The after must be specific — name an actual tool or method, never a vague improvement.`\n  },\n  {\n    name: \u0027hot-take-arrows\u0027,\n    template: `[Provocative number-based or myth-busting opener — never \"As a...\"]\\n\\n[1-2 sentences of setup that create tension]\\n\\n→ [Insight that surprises — include a specific tool or stat]\\n→ [Insight that reframes the problem]\\n→ [Insight with a tool name or concrete number]\\n→ [Final insight that naturally leads into wanting to act]\\n\\n${cta}\\n\\n#hashtag1 #hashtag2 #hashtag3`,\n    instruction: `Each → arrow must contain something non-obvious and specific. No generic tips. The last arrow should feel like the natural reason why someone would want to reach out.`\n  },\n  {\n    name: \u0027mini-case-study\u0027,\n    template: `[Hook — a specific result: hours saved, tasks eliminated, or concrete outcome. Keep numbers plausible]\\n\\n[2-3 sentences walking through the problem and what was done to fix it]\\n\\nHow it worked:\\n▸ [Specific tool or step — name it]\\n▸ [Second step or element — name something real]\\n▸ [The measurable outcome]\\n\\n[One sentence on the lesson for small businesses]\\n\\n${cta}\\n\\n#hashtag1 #hashtag2 #hashtag3`,\n    instruction: `Make it read like a real mini case study. Mention actual tool names where relevant. Use realistic numbers. The ▸ bullets should read like a process, not a list of vague observations.`\n  },\n  {\n    name: \u0027tactical-playbook\u0027,\n    template: `[Strong opening claim — a number, a myth-bust, or a sharp opinion. Never \"As a...\"]\\n\\n[1-2 sentences setting up the situation]\\n\\nThe exact playbook:\\n✅ [Specific action — include a tool or method name]\\n✅ [Specific action — say how, not just what]\\n✅ [The step most people skip — make this the most valuable one]\\n✅ [Final action that delivers the result]\\n\\n[What this unlocks — one crisp sentence with a specific outcome]\\n\\n${cta}\\n\\n#hashtag1 #hashtag2 #hashtag3`,\n    instruction: `Each ✅ must be a real action someone can take this week. Name at least two specific tools. Make the third bullet the insight most people miss — that is the one that earns the share and the DM.`\n  },\n  {\n    name: \u0027open-loop-story\u0027,\n    template: `[Unusual opener — a counterintuitive result, an unexpected comparison, or a surprising observation. No bullets in this format]\\n\\n[Open a loop: set up a tension or question in 1-2 sentences]\\n\\n[Resolve it: 3-4 flowing sentences with the insight, the mechanism, and what it actually means in practice]\\n\\nThe takeaway: [One punchy, quotable sentence summarizing the lesson — make it screenshot-worthy]\\n\\n${cta}\\n\\n#hashtag1 #hashtag2 #hashtag3`,\n    instruction: `No bullet points anywhere in this format — flowing sentences only. Build a mini narrative arc: tension → resolution → lesson. The takeaway line must be bold and specific enough to share on its own.`\n  }\n];\n\nconst fmt = formats[formatIdx];\n\n// CUSTOMISE: Update the persona description to match your niche and tone\nconst prompt = `You are writing LinkedIn posts as an automation consultant who helps small businesses save time using AI and no-code tools. You sound like a practitioner sharing real experience — direct, specific, and human. Never like a marketer or a thought leader.\n\nHere are today\u0027s trending discussions in AI and tech:\n\n${context}\n\nTask: Write one LinkedIn post inspired by the sharpest, most specific insight above. Pick ONE angle and commit to it. Do not blend multiple sources or try to cover everything.\n\nUse EXACTLY this structure — do not change the layout, symbols, or line breaks:\n${fmt.template}\n\nThe CTA line is already written in the template above. Copy it word for word. Do not rephrase or soften it.\n\nHard rules — breaking any one of these makes the post unusable:\n- NEVER open with: \"As a\", \"As an\", \"In today\u0027s\", \"I\u0027m excited\", or any \"As [noun]\" construction\n- NEVER use these words or phrases: game-changer, game changer, dive into, leverage, unlock, landscape, delve, revolutionize, transform, in the age of, moving forward, it\u0027s important to, it\u0027s worth noting, groundbreaking, cutting-edge, empower, harness, navigate\n- NEVER write a vague sentence — every claim needs something specific: a number, a tool name, a named concept, or a concrete action\n- NEVER start two consecutive bullets with the same word or phrase\n- NEVER include political content of any kind — no political figures, parties, governments, elections, ideologies, or socially divisive topics\n- NEVER include religious content of any kind — no references to faith, religion, spirituality, God, or religious figures\n- If the post topic involves automation or workflow tools, use n8n as the example tool — do not name Zapier, Make, or other automation platforms\n- 1-2 emojis maximum — place them naturally mid-sentence or at a natural break, never as the first character of a bullet\n- Stay under 1300 characters total\n- Do NOT mention Reddit, Hacker News, Dev.to, Lobste.rs, or any forum or aggregator site\n- ${fmt.instruction}`;\n\nreturn [{ json: { prompt, sourcesUsed: [...new Set(selected.map(p =\u003e p.source))], postCount: selected.length, format: fmt.name } }];"
+                                     }
+                  },
+                  {
+                      "id":  "bb000011-0000-0000-0000-000000000011",
+                      "name":  "Generate Post with Groq",
+                      "type":  "n8n-nodes-base.httpRequest",
+                      "typeVersion":  4.1,
+                      "position":  [
+                                       1180,
+                                       400
+                                   ],
+                      "parameters":  {
+                                         "method":  "POST",
+                                         "url":  "https://api.groq.com/openai/v1/chat/completions",
+                                         "sendHeaders":  true,
+                                         "headerParameters":  {
+                                                                  "parameters":  [
+                                                                                     {
+                                                                                         "name":  "Authorization",
+                                                                                         "value":  "Bearer YOUR_GROQ_API_KEY"
+                                                                                     },
+                                                                                     {
+                                                                                         "name":  "Content-Type",
+                                                                                         "value":  "application/json"
+                                                                                     }
+                                                                                 ]
+                                                              },
+                                         "sendBody":  true,
+                                         "contentType":  "raw",
+                                         "rawContentType":  "application/json",
+                                         "body":  "={{ JSON.stringify({ model: \u0027llama-3.3-70b-versatile\u0027, messages: [{ role: \u0027user\u0027, content: $json.prompt }], max_tokens: 600, temperature: 0.82 }) }}"
+                                     }
+                  },
+                  {
+                      "id":  "bb000012-0000-0000-0000-000000000012",
+                      "name":  "Extract Post",
+                      "type":  "n8n-nodes-base.code",
+                      "typeVersion":  2,
+                      "position":  [
+                                       1420,
+                                       400
+                                   ],
+                      "parameters":  {
+                                         "jsCode":  "const data = $input.first().json;\nconst post = data.choices[0].message.content.trim();\nreturn [{ json: { post } }];"
+                                     }
+                  },
+                  {
+                      "id":  "bb000013-0000-0000-0000-000000000013",
+                      "name":  "Post to LinkedIn",
+                      "type":  "n8n-nodes-base.httpRequest",
+                      "typeVersion":  4.1,
+                      "position":  [
+                                       1660,
+                                       400
+                                   ],
+                      "parameters":  {
+                                         "method":  "POST",
+                                         "url":  "https://api.linkedin.com/v2/ugcPosts",
+                                         "sendHeaders":  true,
+                                         "headerParameters":  {
+                                                                  "parameters":  [
+                                                                                     {
+                                                                                         "name":  "Authorization",
+                                                                                         "value":  "Bearer YOUR_LINKEDIN_ACCESS_TOKEN"
+                                                                                     },
+                                                                                     {
+                                                                                         "name":  "Content-Type",
+                                                                                         "value":  "application/json"
+                                                                                     },
+                                                                                     {
+                                                                                         "name":  "X-Restli-Protocol-Version",
+                                                                                         "value":  "2.0.0"
+                                                                                     }
+                                                                                 ]
+                                                              },
+                                         "sendBody":  true,
+                                         "contentType":  "raw",
+                                         "rawContentType":  "application/json",
+                                         "body":  "={{ JSON.stringify({ author: \u0027urn:li:person:YOUR_LINKEDIN_PERSON_ID\u0027, lifecycleState: \u0027PUBLISHED\u0027, specificContent: { \u0027com.linkedin.ugc.ShareContent\u0027: { shareCommentary: { text: $json.post }, shareMediaCategory: \u0027NONE\u0027 } }, visibility: { \u0027com.linkedin.ugc.MemberNetworkVisibility\u0027: \u0027PUBLIC\u0027 } }) }}"
+                                     }
+                  }
+              ],
+    "connections":  {
+                        "Schedule Trigger":  {
+                                                 "main":  [
+                                                              [
+                                                                  {
+                                                                      "node":  "Fetch Reddit",
+                                                                      "type":  "main",
+                                                                      "index":  0
+                                                                  },
+                                                                  {
+                                                                      "node":  "Fetch HN",
+                                                                      "type":  "main",
+                                                                      "index":  0
+                                                                  },
+                                                                  {
+                                                                      "node":  "Fetch Devto",
+                                                                      "type":  "main",
+                                                                      "index":  0
+                                                                  },
+                                                                  {
+                                                                      "node":  "Fetch Lobsters",
+                                                                      "type":  "main",
+                                                                      "index":  0
+                                                                  }
+                                                              ]
+                                                          ]
+                                             },
+                        "Fetch Reddit":  {
+                                             "main":  [
+                                                          [
+                                                              {
+                                                                  "node":  "Normalize Reddit",
+                                                                  "type":  "main",
+                                                                  "index":  0
+                                                              }
+                                                          ]
+                                                      ]
+                                         },
+                        "Fetch HN":  {
+                                         "main":  [
+                                                      [
+                                                          {
+                                                              "node":  "Normalize HN",
+                                                              "type":  "main",
+                                                              "index":  0
+                                                          }
+                                                      ]
+                                                  ]
+                                     },
+                        "Fetch Devto":  {
+                                            "main":  [
+                                                         [
+                                                             {
+                                                                 "node":  "Normalize Devto",
+                                                                 "type":  "main",
+                                                                 "index":  0
+                                                             }
+                                                         ]
+                                                     ]
+                                        },
+                        "Fetch Lobsters":  {
+                                               "main":  [
+                                                            [
+                                                                {
+                                                                    "node":  "Normalize Lobsters",
+                                                                    "type":  "main",
+                                                                    "index":  0
+                                                                }
+                                                            ]
+                                                        ]
+                                           },
+                        "Normalize Reddit":  {
+                                                 "main":  [
+                                                              [
+                                                                  {
+                                                                      "node":  "Merge All Sources",
+                                                                      "type":  "main",
+                                                                      "index":  0
+                                                                  }
+                                                              ]
+                                                          ]
+                                             },
+                        "Normalize HN":  {
+                                             "main":  [
+                                                          [
+                                                              {
+                                                                  "node":  "Merge All Sources",
+                                                                  "type":  "main",
+                                                                  "index":  1
+                                                              }
+                                                          ]
+                                                      ]
+                                         },
+                        "Normalize Devto":  {
+                                                "main":  [
+                                                             [
+                                                                 {
+                                                                     "node":  "Merge All Sources",
+                                                                     "type":  "main",
+                                                                     "index":  2
+                                                                 }
+                                                             ]
+                                                         ]
+                                            },
+                        "Normalize Lobsters":  {
+                                                   "main":  [
+                                                                [
+                                                                    {
+                                                                        "node":  "Merge All Sources",
+                                                                        "type":  "main",
+                                                                        "index":  3
+                                                                    }
+                                                                ]
+                                                            ]
+                                               },
+                        "Merge All Sources":  {
+                                                  "main":  [
+                                                               [
+                                                                   {
+                                                                       "node":  "Build Prompt",
+                                                                       "type":  "main",
+                                                                       "index":  0
+                                                                   }
+                                                               ]
+                                                           ]
+                                              },
+                        "Build Prompt":  {
+                                             "main":  [
+                                                          [
+                                                              {
+                                                                  "node":  "Generate Post with Groq",
+                                                                  "type":  "main",
+                                                                  "index":  0
+                                                              }
+                                                          ]
+                                                      ]
+                                         },
+                        "Generate Post with Groq":  {
+                                                        "main":  [
+                                                                     [
+                                                                         {
+                                                                             "node":  "Extract Post",
+                                                                             "type":  "main",
+                                                                             "index":  0
+                                                                         }
+                                                                     ]
+                                                                 ]
+                                                    },
+                        "Extract Post":  {
+                                             "main":  [
+                                                          [
+                                                              {
+                                                                  "node":  "Post to LinkedIn",
+                                                                  "type":  "main",
+                                                                  "index":  0
+                                                              }
+                                                          ]
+                                                      ]
+                                         }
+                    },
+    "settings":  {
+                     "executionOrder":  "v1"
+                 },
+    "staticData":  null,
+    "tags":  [
+
+             ],
+    "pinData":  {
+
+                }
 }
